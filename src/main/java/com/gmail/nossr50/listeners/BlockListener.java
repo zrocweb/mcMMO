@@ -2,6 +2,7 @@ package com.gmail.nossr50.listeners;
 
 import java.util.List;
 
+import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
@@ -57,23 +58,22 @@ public class BlockListener implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onBlockPistonExtend(BlockPistonExtendEvent event) {
-
         List<Block> blocks = event.getBlocks();
         BlockFace direction = event.getDirection();
         Block futureEmptyBlock = event.getBlock().getRelative(direction); // Block that would be air after piston is finished
 
         for (Block b : blocks) {
-            if (mcMMO.placeStore.isTrue(b)) {
+            if (BlockUtils.shouldBeWatched(b.getState()) && mcMMO.getPlaceStore().isTrue(b)) {
                 b.getRelative(direction).setMetadata(mcMMO.blockMetadataKey, mcMMO.metadataValue);
                 if (b.equals(futureEmptyBlock)) {
-                    mcMMO.placeStore.setFalse(b);
+                    mcMMO.getPlaceStore().setFalse(b);
                 }
             }
         }
 
         for (Block b : blocks) {
             if (b.getRelative(direction).hasMetadata(mcMMO.blockMetadataKey)) {
-                mcMMO.placeStore.setTrue(b.getRelative(direction));
+                mcMMO.getPlaceStore().setTrue(b.getRelative(direction));
                 b.getRelative(direction).removeMetadata(mcMMO.blockMetadataKey, plugin);
             }
         }
@@ -88,7 +88,7 @@ public class BlockListener implements Listener {
     public void onBlockPistonRetract(BlockPistonRetractEvent event) {
         if (event.isSticky()) {
             // Needed only because under some circumstances Minecraft doesn't move the block
-            new StickyPistonTrackerTask(event).runTaskLater(plugin, 2);
+            new StickyPistonTrackerTask(event.getDirection(), event.getBlock()).runTaskLater(plugin, 2);
         }
     }
 
@@ -110,7 +110,7 @@ public class BlockListener implements Listener {
 
         /* Check if the blocks placed should be monitored so they do not give out XP in the future */
         if (BlockUtils.shouldBeWatched(blockState)) {
-            mcMMO.placeStore.setTrue(blockState);
+            mcMMO.getPlaceStore().setTrue(blockState);
         }
 
         if (Repair.anvilMessagesEnabled && (blockId == Repair.repairAnvilId || blockId == Repair.salvageAnvilId)) {
@@ -129,14 +129,19 @@ public class BlockListener implements Listener {
             return;
         }
 
+        BlockState blockState = event.getBlock().getState();
+
+        if (!BlockUtils.shouldBeWatched(blockState)) {
+            return;
+        }
+
         Player player = event.getPlayer();
 
-        if (Misc.isNPCEntity(player)) {
+        if (Misc.isNPCEntity(player) || player.getGameMode() == GameMode.CREATIVE) {
             return;
         }
 
         McMMOPlayer mcMMOPlayer = UserManager.getPlayer(player);
-        BlockState blockState = event.getBlock().getState();
         ItemStack heldItem = player.getItemInHand();
 
         /* HERBALISM */
@@ -158,13 +163,13 @@ public class BlockListener implements Listener {
         }
 
         /* MINING */
-        else if (BlockUtils.affectedBySuperBreaker(blockState) && ItemUtils.isPickaxe(heldItem) && Permissions.skillEnabled(player, SkillType.MINING) && !mcMMO.placeStore.isTrue(blockState)) {
+        else if (BlockUtils.affectedBySuperBreaker(blockState) && ItemUtils.isPickaxe(heldItem) && Permissions.skillEnabled(player, SkillType.MINING) && !mcMMO.getPlaceStore().isTrue(blockState)) {
             MiningManager miningManager = mcMMOPlayer.getMiningManager();
             miningManager.miningBlockCheck(blockState);
         }
 
         /* WOOD CUTTING */
-        else if (BlockUtils.isLog(blockState) && Permissions.skillEnabled(player, SkillType.WOODCUTTING) && !mcMMO.placeStore.isTrue(blockState)) {
+        else if (BlockUtils.isLog(blockState) && Permissions.skillEnabled(player, SkillType.WOODCUTTING) && !mcMMO.getPlaceStore().isTrue(blockState)) {
             WoodcuttingManager woodcuttingManager = mcMMOPlayer.getWoodcuttingManager();
 
             if (woodcuttingManager.canUseTreeFeller(heldItem)) {
@@ -176,7 +181,7 @@ public class BlockListener implements Listener {
         }
 
         /* EXCAVATION */
-        else if (BlockUtils.affectedByGigaDrillBreaker(blockState) && ItemUtils.isShovel(heldItem) && Permissions.skillEnabled(player, SkillType.EXCAVATION) && !mcMMO.placeStore.isTrue(blockState)) {
+        else if (BlockUtils.affectedByGigaDrillBreaker(blockState) && ItemUtils.isShovel(heldItem) && Permissions.skillEnabled(player, SkillType.EXCAVATION) && !mcMMO.getPlaceStore().isTrue(blockState)) {
             ExcavationManager excavationManager = mcMMOPlayer.getExcavationManager();
             excavationManager.excavationBlockCheck(blockState);
 
@@ -186,9 +191,7 @@ public class BlockListener implements Listener {
         }
 
         /* Remove metadata from placed watched blocks */
-        if (BlockUtils.shouldBeWatched(blockState) && mcMMO.placeStore.isTrue(blockState)) {
-            mcMMO.placeStore.setFalse(blockState);
-        }
+        mcMMO.getPlaceStore().setFalse(blockState);
     }
 
     /**
@@ -204,7 +207,7 @@ public class BlockListener implements Listener {
 
         Player player = event.getPlayer();
 
-        if (Misc.isNPCEntity(player)) {
+        if (Misc.isNPCEntity(player) || player.getGameMode() == GameMode.CREATIVE) {
             return;
         }
 
@@ -295,7 +298,7 @@ public class BlockListener implements Listener {
          * We don't need to check permissions here because they've already been checked for the ability to even activate.
          */
         if (mcMMOPlayer.getAbilityMode(AbilityType.TREE_FELLER) && BlockUtils.isLog(blockState)) {
-            player.playSound(blockState.getLocation(), Sound.FIZZ, Misc.FIZZ_VOLUME, Misc.FIZZ_PITCH);
+            player.playSound(blockState.getLocation(), Sound.FIZZ, Misc.FIZZ_VOLUME, Misc.getFizzPitch());
         }
     }
 
@@ -338,7 +341,7 @@ public class BlockListener implements Listener {
                     plugin.getServer().getPluginManager().callEvent(new FakePlayerAnimationEvent(player));
 
                     event.setInstaBreak(true);
-                    player.playSound(block.getLocation(), Sound.ITEM_PICKUP, Misc.POP_VOLUME, Misc.POP_PITCH);
+                    player.playSound(block.getLocation(), Sound.ITEM_PICKUP, Misc.POP_VOLUME, Misc.getPopPitch());
                 }
             }
             // Another perm check for the cracked blocks activation
@@ -353,7 +356,7 @@ public class BlockListener implements Listener {
         else if (BlockUtils.isLeaves(blockState)) {
             if (mcMMOPlayer.getWoodcuttingManager().canUseLeafBlower(heldItem) && SkillUtils.blockBreakSimulate(block, player, true)) {
                 event.setInstaBreak(true);
-                player.playSound(blockState.getLocation(), Sound.ITEM_PICKUP, Misc.POP_VOLUME, Misc.POP_PITCH);
+                player.playSound(blockState.getLocation(), Sound.ITEM_PICKUP, Misc.POP_VOLUME, Misc.getPopPitch());
             }
         }
     }

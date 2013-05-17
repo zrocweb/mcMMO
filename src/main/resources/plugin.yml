@@ -16,7 +16,7 @@ authors: [GJ, NuclearW, bm01, Glitchfinder, TfT_02, t00thpick1]
 website: http://dev.bukkit.org/server-mods/mcmmo/
 
 main: com.gmail.nossr50.mcMMO
-softdepend: [Spout]
+softdepend: [Spout, CombatTag]
 load: STARTUP
 
 commands:
@@ -104,6 +104,14 @@ commands:
     mcnotify:
         aliases: [notify]
         description: Toggle mcMMO abilities chat display notifications on/off
+    mobhealth:
+        aliases: [mcmobhealth]
+        description: Change the style of the mob healthbar
+    mcscoreboard:
+        description: Change the current mcMMO scoreboard being displayed
+    kraken:
+        aliases: [mckraken]
+        description: Unleash the kraken!
 permissions:
     mcmmo.*:
         default: false
@@ -250,14 +258,20 @@ permissions:
         description: Allows access to all Fishing abilities
         children:
             mcmmo.ability.fishing.fishermansdiet: true
+            mcmmo.ability.fishing.icefishing: true
             mcmmo.ability.fishing.magic: true
+            mcmmo.ability.fishing.masterangler: true
             mcmmo.ability.fishing.shakemob: true
             mcmmo.ability.fishing.treasures: true
             mcmmo.ability.fishing.vanillaxpboost: true
     mcmmo.ability.fishing.fishermansdiet:
         description: Allows access to the Fishermans's Diet ability
+    mcmmo.ability.fishing.icefishing:
+        description: Allows access to the Ice Fishing ability
     mcmmo.ability.fishing.magic:
         description: Allows enchanted drops from Fishing
+    mcmmo.ability.fishing.masterangler:
+        description: Allows access to the Master Angler ability
     mcmmo.ability.fishing.shakemob:
         description: Allows access to the Shake Mob ability
     mcmmo.ability.fishing.treasures:
@@ -508,6 +522,7 @@ permissions:
         children:
             mcmmo.ability.taming.beastlore: true
             mcmmo.ability.taming.callofthewild: true
+            mcmmo.ability.taming.callofthewild_renamepets: true
             mcmmo.ability.taming.environmentallyaware: true
             mcmmo.ability.taming.fastfoodservice: true
             mcmmo.ability.taming.gore: true
@@ -519,6 +534,8 @@ permissions:
         description: Allows access to the Beast Lore ability
     mcmmo.ability.taming.callofthewild:
         description: Allows access to the Call of the Wild ability
+    mcmmo.ability.taming.callofthewild_renamepets:
+        description: Pets spawned with Call of the Wild will have custom names
     mcmmo.ability.taming.environmentallyaware:
         description: Allows access to the Environmentally Aware ability
     mcmmo.ability.taming.fastfoodservice:
@@ -593,6 +610,7 @@ permissions:
         children:
             mcmmo.bypass.arcanebypass: true
             mcmmo.bypass.hardcoremode: true
+            mcmmo.bypass.kraken: true
             mcmmo.commands.inspect.far: true
             mcmmo.commands.inspect.offline: true
     mcmmo.bypass.arcanebypass:
@@ -601,6 +619,9 @@ permissions:
     mcmmo.bypass.hardcoremode:
         default: false
         description: Allows user to bypass negative penalties of Hardcore mode
+    mcmmo.bypass.kraken:
+        default: false
+        description: Allows user to bypass the effects of the exploit prevention when Fishing
     mcmmo.bypass.inspect.distance:
         default: false
         description: Allows user to bypass Inspect's distance requirements
@@ -656,14 +677,13 @@ permissions:
             mcmmo.commands.mcmmo.all: true
             mcmmo.commands.mcnotify: true
             mcmmo.commands.mcrank: true
+            mcmmo.commands.mcscoreboard: true
             mcmmo.commands.mcstats: true
             mcmmo.commands.mctop.all: true
             mcmmo.commands.mining: true
+            mcmmo.commands.mobhealth: true
             mcmmo.commands.party.all: true
-            mcmmo.commands.ptp: true
-            mcmmo.commands.ptp.accept: true
-            mcmmo.commands.ptp.acceptall: true
-            mcmmo.commands.ptp.toggle: true
+            mcmmo.commands.ptp.all: true
             mcmmo.commands.repair: true
             mcmmo.commands.smelting: true
             mcmmo.commands.swords: true
@@ -682,14 +702,19 @@ permissions:
             mcmmo.commands.hardcore.all: true
             mcmmo.commands.inspect.far: true
             mcmmo.commands.inspect.offline: true
+            mcmmo.commands.kraken: true
+            mcmmo.commands.kraken.others: true
             mcmmo.commands.mcability.others: true
             mcmmo.commands.mcgod: true
             mcmmo.commands.mcgod.others: true
+            mcmmo.commands.mcpurge: true
             mcmmo.commands.mcrank.others.all: true
             mcmmo.commands.mcrefresh: true
             mcmmo.commands.mcrefresh.others: true
+            mcmmo.commands.mcremove: true
             mcmmo.commands.mmoedit: true
             mcmmo.commands.mmoedit.others: true
+            mcmmo.commands.mmoupdate: true
             mcmmo.commands.ptp.world.all: true
             mcmmo.commands.skillreset.all: true
             mcmmo.commands.vampirism.all: true
@@ -754,6 +779,10 @@ permissions:
         description: Allows access to the inspect command for far players
     mcmmo.commands.inspect.offline:
         description: Allows access to the inspect command for offline players
+    mcmmo.commands.kraken:
+        description: Allows access to the kraken command
+    mcmmo.commands.kraken.others:
+        description: Allows access to the kraken command for other players
     mcmmo.commands.mcability:
         description: Allows access to the mcability command
     mcmmo.commands.mcability.others:
@@ -786,7 +815,6 @@ permissions:
     mcmmo.commands.mcnotify:
         description: Allows access to the mcnotify command
     mcmmo.commands.mcpurge:
-        default: false
         description: Allows access to the mcpurge command
     mcmmo.commands.mcrank:
         description: Allows access to the mcrank command
@@ -812,8 +840,9 @@ permissions:
     mcmmo.commands.mcrefresh.others:
         description: Allows access to the mcrefresh command for other players
     mcmmo.commands.mcremove:
-        default: false
         description: Allows access to the mcremove command
+    mcmmo.commands.mcscoreboard:
+        description: Allows access to the mcscoreboard command
     mcmmo.commands.mcstats:
         description: Allows access to the mcstats command
     mcmmo.commands.mctop.*:
@@ -873,8 +902,10 @@ permissions:
     mcmmo.commands.mmoedit.others:
         description: Allows access to the mmoedit command for other players
     mcmmo.commands.mmoupdate:
-        default: false
         description: Allows access to the mmoupdate command
+    mcmmo.commands.mobhealth:
+         default: true
+         description: Allows access to the mobhealth command
     mcmmo.commands.party.*:
         default: false
         description: Implies access to all mcmmo.commands.party permissions.
@@ -954,12 +985,15 @@ permissions:
         description: Implies access to all mcmmo.commands.ptp permissions.
         children:
             mcmmo.commands.ptp: true
+            mcmmo.commands.ptp.send: true
             mcmmo.commands.ptp.accept: true
             mcmmo.commands.ptp.acceptall: true
             mcmmo.commands.ptp.toggle: true
             mcmmo.commands.ptp.world.all: true
     mcmmo.commands.ptp:
         description: Allows access to the ptp command
+    mcmmo.commands.ptp.send:
+        description: Allows access to the ptp <player> command
     mcmmo.commands.ptp.accept:
         description: Allows access to the ptp accept command
     mcmmo.commands.ptp.acceptall:
@@ -1176,6 +1210,7 @@ permissions:
         children:
             mcmmo.chat.partychat: true
             mcmmo.commands.defaults: true
+            mcmmo.mobhealthdisplay: true
             mcmmo.motd: true 
             mcmmo.skills.all: true
     mcmmo.defaultsop:
@@ -1197,6 +1232,8 @@ permissions:
             mcmmo.item.chimaerawing: true
     mcmmo.item.chimaerawing:
         description: Allows use of Chimaera Wing item
+    mcmmo.mobhealthdisplay:
+         description: Allows viewing of mob health display during combat
     mcmmo.motd:
         description: Allows access to the motd
     mcmmo.party.*:

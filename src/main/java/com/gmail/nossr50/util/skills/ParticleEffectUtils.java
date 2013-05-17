@@ -7,6 +7,7 @@ import org.bukkit.FireworkEffect.Type;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Firework;
@@ -15,6 +16,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.meta.FireworkMeta;
 
 import com.gmail.nossr50.config.Config;
+import com.gmail.nossr50.datatypes.skills.SkillType;
 
 public final class ParticleEffectUtils {
 
@@ -62,7 +64,9 @@ public final class ParticleEffectUtils {
             return;
         }
 
-        fireworkParticleShower(player, Color.GREEN);
+        if (hasHeadRoom(player)) {
+            fireworkParticleShower(player, Color.GREEN);
+        }
     }
 
     public static void playAbilityDisabledEffect(Player player) {
@@ -70,7 +74,13 @@ public final class ParticleEffectUtils {
             return;
         }
 
-        fireworkParticleShower(player, Color.RED);
+        if (hasHeadRoom(player)) {
+            fireworkParticleShower(player, Color.RED);
+        }
+    }
+
+    public static void runescapeModeCelebration(Player player, SkillType skill) {
+        fireworkParticleShower(player, skill.getRunescapeModeColor());
     }
 
     private static void fireworkParticleShower(Player player, Color color) {
@@ -80,10 +90,24 @@ public final class ParticleEffectUtils {
 
         Firework firework = (Firework) player.getWorld().spawnEntity(location, EntityType.FIREWORK);
         FireworkMeta fireworkMeta = firework.getFireworkMeta();
-        FireworkEffect effect = FireworkEffect.builder().flicker(false).withColor(color).with(Type.BALL_LARGE).trail(true).build();
+        FireworkEffect effect = FireworkEffect.builder().flicker(false).withColor(color).with((Config.getInstance().getLargeFireworks() ? Type.BALL_LARGE : Type.BALL)).trail(true).build();
         fireworkMeta.addEffect(effect);
         fireworkMeta.addEffect(effect);
         fireworkMeta.setPower(0);
         firework.setFireworkMeta(fireworkMeta);
+    }
+
+    private static boolean hasHeadRoom(Player player) {
+        boolean hasHeadRoom = true;
+        Block headBlock = player.getEyeLocation().getBlock();
+
+        for (int i = 0; i < 3; i++) {
+            if (!headBlock.getRelative(BlockFace.UP, i).isEmpty()) {
+                hasHeadRoom = false;
+                break;
+            }
+        }
+
+        return hasHeadRoom;
     }
 }

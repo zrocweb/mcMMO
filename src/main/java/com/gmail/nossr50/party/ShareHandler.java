@@ -4,16 +4,16 @@ import java.util.List;
 
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
-import org.bukkit.event.player.PlayerPickupItemEvent;
 import org.bukkit.inventory.ItemStack;
 
 import com.gmail.nossr50.config.Config;
 import com.gmail.nossr50.config.party.ItemWeightConfig;
+import com.gmail.nossr50.datatypes.party.ItemShareType;
 import com.gmail.nossr50.datatypes.party.Party;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.SkillType;
-import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.Misc;
+import com.gmail.nossr50.util.commands.CommandUtils;
 import com.gmail.nossr50.util.player.UserManager;
 
 public final class ShareHandler {
@@ -22,15 +22,19 @@ public final class ShareHandler {
         EQUAL,
         RANDOM;
 
-        public static ShareMode getFromString(String string) {
+        public static ShareMode getShareMode(String string) {
             try {
                 return valueOf(string);
             }
-            catch (IllegalArgumentException exception) {
-                return NONE;
-            }
-            catch (NullPointerException exception) {
-                return NONE;
+            catch (IllegalArgumentException ex) {
+                if (string.equalsIgnoreCase("even")) {
+                    return EQUAL;
+                }
+                else if (CommandUtils.shouldDisableToggle(string)) {
+                    return NONE;
+                }
+
+                return null;
             }
         }
     };
@@ -48,7 +52,7 @@ public final class ShareHandler {
      * @param skillType Skill being used
      * @return True is the xp has been shared
      */
-    public static boolean handleXpShare(int xp, McMMOPlayer mcMMOPlayer, SkillType skillType) {
+    public static boolean handleXpShare(float xp, McMMOPlayer mcMMOPlayer, SkillType skillType) {
         Party party = mcMMOPlayer.getParty();
 
         switch (party.getXpShareMode()) {
@@ -67,18 +71,17 @@ public final class ShareHandler {
                     shareBonus = Config.getInstance().getPartyShareBonusCap();
                 }
 
-                double splitXp = xp / partySize * shareBonus;
-                int roundedXp = (int) Math.ceil(splitXp);
+                float splitXp = (float) (xp / partySize * shareBonus);
 
                 for (Player member : nearMembers) {
-                    UserManager.getPlayer(member).beginUnsharedXpGain(skillType, roundedXp);
+                    UserManager.getPlayer(member).beginUnsharedXpGain(skillType, splitXp);
                 }
 
-                mcMMOPlayer.beginUnsharedXpGain(skillType, roundedXp);
+                mcMMOPlayer.beginUnsharedXpGain(skillType, splitXp);
 
                 return true;
+
             case NONE:
-                // Fallthrough
             default:
                 return false;
         }
@@ -91,9 +94,8 @@ public final class ShareHandler {
      * @param mcMMOPlayer Player who picked up the item
      * @return True if the item has been shared
      */
-    public static boolean handleItemShare(PlayerPickupItemEvent event, McMMOPlayer mcMMOPlayer) {
-        Item item = event.getItem();
-        ItemStack itemStack = item.getItemStack();
+    public static boolean handleItemShare(Item drop, McMMOPlayer mcMMOPlayer) {
+        ItemStack itemStack = drop.getItemStack();
         Party party = mcMMOPlayer.getParty();
         Player player = mcMMOPlayer.getPlayer();
         Player winningPlayer = null;
@@ -101,16 +103,9 @@ public final class ShareHandler {
         ItemStack newStack = itemStack.clone();
         newStack.setAmount(1);
 
-        if (ItemUtils.isMobDrop(itemStack) && !party.sharingLootDrops()) {
-            return false;
-        }
-        else if (ItemUtils.isMiningDrop(itemStack) && !party.sharingMiningDrops()) {
-            return false;
-        }
-        else if (ItemUtils.isHerbalismDrop(itemStack) && !party.sharingHerbalismDrops()) {
-            return false;
-        }
-        else if (ItemUtils.isWoodcuttingDrop(itemStack) && !party.sharingWoodcuttingDrops()) {
+        ItemShareType dropType = ItemShareType.getShareType(itemStack);
+
+        if (dropType == null || !party.sharingDrops(dropType)) {
             return false;
         }
 
@@ -126,8 +121,7 @@ public final class ShareHandler {
                 nearMembers.add(player);
                 partySize = nearMembers.size();
 
-                event.setCancelled(true);
-                item.remove();
+                drop.remove();
                 int itemWeight = ItemWeightConfig.getInstance().getItemWeight(itemStack.getType());
 
                 for (int i = 0; i < itemStack.getAmount(); i++) {
@@ -163,6 +157,7 @@ public final class ShareHandler {
                     winningPlayer.updateInventory();
                 }
                 return true;
+
             case RANDOM:
                 nearMembers = PartyManager.getNearMembers(player, party, Config.getInstance().getPartyShareRange());
 
@@ -172,8 +167,7 @@ public final class ShareHandler {
 
                 partySize = nearMembers.size() + 1;
 
-                event.setCancelled(true);
-                item.remove();
+                drop.remove();
 
                 for (int i = 0; i < itemStack.getAmount(); i++) {
                     int randomMember = Misc.getRandom().nextInt(partySize);
@@ -192,8 +186,8 @@ public final class ShareHandler {
                     winningPlayer.updateInventory();
                 }
                 return true;
+
             case NONE:
-                // Fallthrough
             default:
                 return false;
         }

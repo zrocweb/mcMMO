@@ -1,7 +1,10 @@
 package com.gmail.nossr50.listeners;
 
+import org.bukkit.OfflinePlayer;
 import org.bukkit.block.Block;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.AnimalTamer;
+import org.bukkit.entity.Arrow;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.FallingBlock;
 import org.bukkit.entity.LivingEntity;
@@ -14,19 +17,22 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.CreatureSpawnEvent;
-import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.entity.EntityTameEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.entity.ExplosionPrimeEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.metadata.FixedMetadataValue;
 
 import com.gmail.nossr50.mcMMO;
+import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.events.fake.FakeEntityDamageByEntityEvent;
 import com.gmail.nossr50.events.fake.FakeEntityDamageEvent;
@@ -51,6 +57,24 @@ public class EntityListener implements Listener {
         this.plugin = plugin;
     }
 
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityShootBow(EntityShootBowEvent event) {
+        ItemStack bow = event.getBow();
+
+        if (bow != null) {
+            Entity projectile = event.getProjectile();
+
+            if (projectile instanceof Arrow) {
+                if (bow.containsEnchantment(Enchantment.ARROW_INFINITE)) {
+                    projectile.setMetadata(mcMMO.infiniteArrowKey, mcMMO.metadataValue);
+                }
+
+                projectile.setMetadata(mcMMO.bowForceKey, new FixedMetadataValue(plugin, Math.min(event.getForce() * AdvancedConfig.getInstance().getForceMultiplier(), 1.0)));
+                projectile.setMetadata(mcMMO.arrowDistanceKey, new FixedMetadataValue(plugin, Archery.locationToString(projectile.getLocation())));
+            }
+        }
+    }
+
     /**
      * Monitor EntityChangeBlock events.
      *
@@ -67,12 +91,12 @@ public class EntityListener implements Listener {
         Block block = event.getBlock();
         boolean isTracked = entity.hasMetadata(mcMMO.entityMetadataKey);
 
-        if (mcMMO.placeStore.isTrue(block) && !isTracked) {
-            mcMMO.placeStore.setFalse(block);
+        if (mcMMO.getPlaceStore().isTrue(block) && !isTracked) {
+            mcMMO.getPlaceStore().setFalse(block);
             entity.setMetadata(mcMMO.entityMetadataKey, mcMMO.metadataValue);
         }
         else if (isTracked) {
-            mcMMO.placeStore.setTrue(block);
+            mcMMO.getPlaceStore().setTrue(block);
         }
     }
 
@@ -106,7 +130,7 @@ public class EntityListener implements Listener {
         else if (attacker instanceof Tameable) {
             AnimalTamer animalTamer = ((Tameable) attacker).getOwner();
 
-            if (animalTamer != null) {
+            if (animalTamer != null && ((OfflinePlayer) animalTamer).isOnline()) {
                 attacker = (Entity) animalTamer;
             }
         }
@@ -297,14 +321,21 @@ public class EntityListener implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onCreatureSpawn(CreatureSpawnEvent event) {
-        if (Misc.isSpawnerXPEnabled) {
-            return;
-        }
+        switch (event.getSpawnReason()) {
+            case SPAWNER:
+            case SPAWNER_EGG:
+                LivingEntity entity = event.getEntity();
+                Entity passenger = entity.getPassenger();
 
-        SpawnReason reason = event.getSpawnReason();
+                entity.setMetadata(mcMMO.entityMetadataKey, mcMMO.metadataValue);
 
-        if (reason == SpawnReason.SPAWNER || reason == SpawnReason.SPAWNER_EGG) {
-            event.getEntity().setMetadata(mcMMO.entityMetadataKey, mcMMO.metadataValue);
+                if (passenger != null) {
+                    passenger.setMetadata(mcMMO.entityMetadataKey, mcMMO.metadataValue);
+                }
+                return;
+
+            default:
+                return;
         }
     }
 
@@ -317,14 +348,15 @@ public class EntityListener implements Listener {
     public void onExplosionPrime(ExplosionPrimeEvent event) {
         Entity entity = event.getEntity();
 
-        if (entity instanceof TNTPrimed) {
-            int id = entity.getEntityId();
+        if (entity instanceof TNTPrimed && entity.hasMetadata(mcMMO.tntMetadataKey)) {
+            // We can make this assumption because we (should) be the only ones using this exact metadata
+            Player player = plugin.getServer().getPlayer(entity.getMetadata(mcMMO.tntMetadataKey).get(0).asString());
 
-            if (!plugin.tntIsTracked(id)) {
+            if (Misc.isNPCEntity(player)) {
                 return;
             }
 
-            MiningManager miningManager = UserManager.getPlayer(plugin.getTNTPlayer(id)).getMiningManager();
+            MiningManager miningManager = UserManager.getPlayer(player).getMiningManager();
 
             if (miningManager.canUseBiggerBombs()) {
                 event.setRadius(miningManager.biggerBombs(event.getRadius()));
@@ -341,21 +373,20 @@ public class EntityListener implements Listener {
     public void onEnitityExplode(EntityExplodeEvent event) {
         Entity entity = event.getEntity();
 
-        if (entity instanceof TNTPrimed) {
-            int id = entity.getEntityId();
+        if (entity instanceof TNTPrimed && entity.hasMetadata(mcMMO.tntMetadataKey)) {
+            // We can make this assumption because we (should) be the only ones using this exact metadata
+            Player player = plugin.getServer().getPlayer(entity.getMetadata(mcMMO.tntMetadataKey).get(0).asString());
 
-            if (!plugin.tntIsTracked(id)) {
+            if (Misc.isNPCEntity(player)) {
                 return;
             }
 
-            MiningManager miningManager = UserManager.getPlayer(plugin.getTNTPlayer(id)).getMiningManager();
+            MiningManager miningManager = UserManager.getPlayer(player).getMiningManager();
 
             if (miningManager.canUseBlastMining()) {
                 miningManager.blastMiningDropProcessing(event.getYield(), event.blockList());
                 event.setYield(0);
             }
-
-            plugin.removeFromTNTTracker(id);
         }
     }
 

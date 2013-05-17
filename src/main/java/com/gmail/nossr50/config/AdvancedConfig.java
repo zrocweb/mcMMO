@@ -52,6 +52,8 @@ public class AdvancedConfig extends AutoUpdateConfigLoader {
     public double getRetrieveChanceMax() { return config.getDouble("Skills.Archery.Retrieve_MaxBonus", 100.0D); }
     public int getRetrieveMaxBonusLevel() { return config.getInt("Skills.Archery.Retrieve_MaxBonusLevel", 1000); }
 
+    public double getForceMultiplier() { return config.getDouble("Skills.Archery.Force_Multiplier", 2.0D); }
+
     /* AXES */
     public int getBonusDamageAxesBonusMax() { return config.getInt("Skills.Axes.DamageIncrease_MaxBonus", 4); }
     public int getBonusDamageAxesMaxBonusLevel() { return config.getInt("Skills.Axes.DamageIncrease_MaxBonusLevel", 200); }
@@ -84,6 +86,8 @@ public class AdvancedConfig extends AutoUpdateConfigLoader {
     public int getFishingMagicMultiplier() { return config.getInt("Skills.Fishing.MagicHunter_Multiplier", 5); }
 
     public int getFishermanDietRankChange() { return config.getInt("Skills.Fishing.Fisherman_Diet_RankChange", 200); }
+
+    public int getIceFishingUnlockLevel() { return config.getInt("Skills.Fishing.Ice_Fishing_UnlockLevel", 50); }
 
     /* Shake */
     public int getShakeUnlockLevel() { return config.getInt("Skills.Fishing.Shake_UnlockLevel", 150); }
@@ -273,9 +277,17 @@ public class AdvancedConfig extends AutoUpdateConfigLoader {
     public double getWoodcuttingDoubleDropChance() { return config.getDouble("Skills.Woodcutting.DoubleDrops_ChanceMax", 100.0D); }
     public int getWoodcuttingDoubleDropMaxLevel() { return config.getInt("Skills.Woodcutting.DoubleDrops_MaxBonusLevel", 1000); }
 
-    /* SPOUT STUFF*/
-    public int getSpoutNotificationTier1() { return config.getInt("Spout.Notifications.Tier1", 200); }
-    public int getSpoutNotificationTier2() { return config.getInt("Spout.Notifications.Tier2", 400); }
-    public int getSpoutNotificationTier3() { return config.getInt("Spout.Notifications.Tier3", 600); }
-    public int getSpoutNotificationTier4() { return config.getInt("Spout.Notifications.Tier4", 800); }
+    /* KRAKEN STUFF */
+    public boolean getKrakenEnabled() { return config.getBoolean("Kraken.Enabled", true); }
+    public boolean getKrakenGlobalSoundsEnabled() { return config.getBoolean("Kraken.Global_Sounds", true); }
+    public boolean getKrakenEscapeAllowed() { return config.getBoolean("Kraken.Allow_Escaping", false); }
+    public int getKrakenTriesBeforeRelease() { return config.getInt("Kraken.Tries_Before_Release", 50); }
+    public int getKrakenHealth() { return config.getInt("Kraken.Health", 50); }
+    public String getKrakenName() { return config.getString("Kraken.Name", "The Kraken"); }
+    public String getServerUnleashMessage() { return config.getString("Kraken.Unleashed_Message.Server", "(PLAYER) has unleashed the kraken!"); }
+    public String getPlayerUnleashMessage() { return config.getString("Kraken.Unleashed_Message.Player", "THE KRAKEN HAS BEEN UNLEASHED!"); }
+    public String getPlayerDefeatMessage() { return config.getString("Kraken.Defeated_Message.Killed", "You have slain the kraken!"); }
+    public String getPlayerEscapeMessage() { return config.getString("Kraken.Defeated_Message.Escape", "You have escaped from the kraken!"); }
+    public int getKrakenAttackInterval() { return config.getInt("Kraken.Attack_Interval_Seconds", 1); }
+    public int getKrakenAttackDamage() { return config.getInt("Kraken.Attack_Damage", 1); }
 }

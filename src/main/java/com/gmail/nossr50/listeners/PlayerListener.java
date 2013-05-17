@@ -1,9 +1,12 @@
 package com.gmail.nossr50.listeners;
 
+import org.bukkit.GameMode;
 import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Fish;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -39,15 +42,19 @@ import com.gmail.nossr50.skills.fishing.FishingManager;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
 import com.gmail.nossr50.skills.repair.Repair;
+import com.gmail.nossr50.skills.repair.RepairManager;
 import com.gmail.nossr50.skills.taming.TamingManager;
+import com.gmail.nossr50.skills.unarmed.Unarmed;
 import com.gmail.nossr50.util.BlockUtils;
 import com.gmail.nossr50.util.ChimaeraWing;
 import com.gmail.nossr50.util.HardcoreManager;
 import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.Misc;
+import com.gmail.nossr50.util.MobHealthbarUtils;
 import com.gmail.nossr50.util.Motd;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.player.UserManager;
+import com.gmail.nossr50.util.scoreboards.ScoreboardManager;
 import com.gmail.nossr50.util.skills.SkillUtils;
 
 public class PlayerListener implements Listener {
@@ -57,32 +64,41 @@ public class PlayerListener implements Listener {
         this.plugin = plugin;
     }
 
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onPlayerDeathLowest(PlayerDeathEvent event) {
+        String deathMessage = event.getDeathMessage();
+
+        if (deathMessage == null) {
+            return;
+        }
+
+        event.setDeathMessage(MobHealthbarUtils.fixDeathMessage(deathMessage, event.getEntity()));
+    }
+
     /**
      * Monitor PlayerDeath events.
      *
      * @param event The event to watch
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPlayerDeath(PlayerDeathEvent event) {
+    public void onPlayerDeathMonitor(PlayerDeathEvent event) {
         if (!Config.getInstance().getHardcoreEnabled()) {
             return;
         }
 
         Player player = event.getEntity();
 
-        if (Misc.isNPCEntity(player)) {
+        if (Misc.isNPCEntity(player) || Permissions.hardcoreBypass(player)) {
             return;
         }
 
-        if (!Permissions.hardcoreBypass(player)) {
-            Player killer = player.getKiller();
+        Player killer = player.getKiller();
 
-            if (killer != null && Config.getInstance().getHardcoreVampirismEnabled()) {
-                HardcoreManager.invokeVampirism(killer, player);
-            }
-
-            HardcoreManager.invokeStatPenalty(player);
+        if (killer != null && Config.getInstance().getHardcoreVampirismEnabled()) {
+            HardcoreManager.invokeVampirism(killer, player);
         }
+
+        HardcoreManager.invokeStatPenalty(player);
     }
 
     /**
@@ -91,7 +107,7 @@ public class PlayerListener implements Listener {
      * @param event The event to watch
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPlayerWorldChangeEvent(PlayerChangedWorldEvent event) {
+    public void onPlayerWorldChange(PlayerChangedWorldEvent event) {
         Player player = event.getPlayer();
 
         if (Misc.isNPCEntity(player)) {
@@ -117,16 +133,19 @@ public class PlayerListener implements Listener {
      * @param event The event to watch
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPlayerLoginEvent(PlayerLoginEvent event) {
-        if (event.getResult() == Result.ALLOWED) {
-            Player player = event.getPlayer();
-
-            if (Misc.isNPCEntity(player)) {
-                return;
-            }
-
-            UserManager.addUser(player).actualizeRespawnATS();
+    public void onPlayerLogin(PlayerLoginEvent event) {
+        if (event.getResult() != Result.ALLOWED) {
+            return;
         }
+
+        Player player = event.getPlayer();
+
+        if (Misc.isNPCEntity(player)) {
+            return;
+        }
+
+        UserManager.addUser(player).actualizeRespawnATS();
+        ScoreboardManager.enablePowerLevelDisplay(player);
     }
 
     /**
@@ -135,16 +154,11 @@ public class PlayerListener implements Listener {
      * @param event The event to modify
      */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onPlayerDropItemEvent(PlayerDropItemEvent event) {
-        Player player = event.getPlayer();
-        McMMOPlayer mcMMOPlayer = UserManager.getPlayer(player);
+    public void onPlayerDropItem(PlayerDropItemEvent event) {
+        Item drop = event.getItemDrop();
 
-        if (mcMMOPlayer.getAbilityMode(AbilityType.GIGA_DRILL_BREAKER) || mcMMOPlayer.getAbilityMode(AbilityType.SUPER_BREAKER)) {
-            event.setCancelled(true);
-            return;
-        }
-
-        SkillUtils.removeAbilityBuff(event.getItemDrop().getItemStack());
+        drop.setMetadata(mcMMO.droppedItemKey, mcMMO.metadataValue);
+        SkillUtils.removeAbilityBuff(drop.getItemStack());
     }
 
     /**
@@ -163,6 +177,20 @@ public class PlayerListener implements Listener {
         FishingManager fishingManager = UserManager.getPlayer(player).getFishingManager();
 
         switch (event.getState()) {
+            case FISHING:
+                if (!Permissions.krakenBypass(player)) {
+                    event.setCancelled(fishingManager.exploitPrevention());
+                }
+
+                if (event.isCancelled()) {
+                    return;
+                }
+
+                if (fishingManager.canMasterAngler()) {
+                    fishingManager.masterAngler(event.getHook());
+                }
+                break;
+
             case CAUGHT_FISH:
                 fishingManager.handleFishing((Item) event.getCaught());
 
@@ -177,8 +205,18 @@ public class PlayerListener implements Listener {
                 if (fishingManager.canShake(entity)) {
                     fishingManager.shakeCheck((LivingEntity) entity);
                 }
-
                 break;
+
+            case IN_GROUND:
+                Fish hook = event.getHook();
+                Block block = hook.getLocation().getBlock();
+
+                if (fishingManager.canIceFish(block)) {
+                    event.setCancelled(true);
+                    fishingManager.iceFishing(hook, block);
+                }
+                break;
+
             default:
                 break;
         }
@@ -192,16 +230,32 @@ public class PlayerListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlayerPickupItem(PlayerPickupItemEvent event) {
         Player player = event.getPlayer();
-        Item item = event.getItem();
 
         if (Misc.isNPCEntity(player)) {
             return;
         }
 
         McMMOPlayer mcMMOPlayer = UserManager.getPlayer(player);
+        Item drop = event.getItem();
+        ItemStack dropStack = drop.getItemStack();
 
-        if (mcMMOPlayer.inParty() && ItemUtils.isShareable(item.getItemStack())) {
-            ShareHandler.handleItemShare(event, mcMMOPlayer);
+        if (!drop.hasMetadata(mcMMO.droppedItemKey) && mcMMOPlayer.inParty() && ItemUtils.isShareable(dropStack)) {
+            event.setCancelled(ShareHandler.handleItemShare(drop, mcMMOPlayer));
+
+            if (event.isCancelled()) {
+                player.playSound(player.getLocation(), Sound.ITEM_PICKUP, Misc.POP_VOLUME, Misc.getPopPitch());
+                return;
+            }
+        }
+
+        if ((mcMMOPlayer.isUsingUnarmed() && ItemUtils.isShareable(dropStack)) || mcMMOPlayer.getAbilityMode(AbilityType.BERSERK)) {
+            event.setCancelled(Unarmed.handleItemPickup(player.getInventory(), drop));
+
+            if (event.isCancelled()) {
+                player.playSound(player.getLocation(), Sound.ITEM_PICKUP, Misc.POP_VOLUME, Misc.getPopPitch());
+                player.updateInventory();
+                return;
+            }
         }
     }
 
@@ -239,7 +293,7 @@ public class PlayerListener implements Listener {
             player.sendMessage(LocaleLoader.getString("XPRate.Event", Config.getInstance().getExperienceGainsGlobalMultiplier()));
         }
 
-        if (Permissions.updateNotifications(player) && mcMMO.p.updateAvailable) {
+        if (Permissions.updateNotifications(player) && plugin.isUpdateAvailable()) {
             player.sendMessage(LocaleLoader.getString("UpdateChecker.outdated"));
             player.sendMessage(LocaleLoader.getString("UpdateChecker.newavailable"));
         }
@@ -269,14 +323,20 @@ public class PlayerListener implements Listener {
     @EventHandler(priority = EventPriority.LOWEST)
     public void onPlayerInteractLowest(PlayerInteractEvent event) {
         Player player = event.getPlayer();
+        Block block = event.getClickedBlock();
 
-        if (Misc.isNPCEntity(player)) {
+        if (Misc.isNPCEntity(player) || player.getGameMode() == GameMode.CREATIVE) {
             return;
         }
 
-        Block block = event.getClickedBlock();
         ItemStack heldItem = player.getItemInHand();
         McMMOPlayer mcMMOPlayer = UserManager.getPlayer(player);
+
+        // This shouldn't be possible - this is probably a band-aid for a larger issue somewhere else.
+        if (mcMMOPlayer == null) {
+            return;
+        }
+
         MiningManager miningManager = mcMMOPlayer.getMiningManager();
 
         switch (event.getAction()) {
@@ -284,16 +344,26 @@ public class PlayerListener implements Listener {
                 int blockID = block.getTypeId();
 
                 /* REPAIR CHECKS */
-                if (blockID == Repair.repairAnvilId && Permissions.skillEnabled(player, SkillType.REPAIR) && mcMMO.repairableManager.isRepairable(heldItem)) {
-                    UserManager.getPlayer(player).getRepairManager().handleRepair(heldItem);
+                if (blockID == Repair.repairAnvilId && Permissions.skillEnabled(player, SkillType.REPAIR) && mcMMO.getRepairableManager().isRepairable(heldItem)) {
+                    RepairManager repairManager = mcMMOPlayer.getRepairManager();
                     event.setCancelled(true);
-                    player.updateInventory();
+
+                    // Make sure the player knows what he's doing when trying to repair an enchanted item
+                    if (!(heldItem.getEnchantments().size() > 0) || repairManager.checkConfirmation(blockID, true)) {
+                        repairManager.handleRepair(heldItem);
+                        player.updateInventory();
+                    }
                 }
                 /* SALVAGE CHECKS */
                 else if (blockID == Repair.salvageAnvilId && Permissions.salvage(player) && Repair.isSalvageable(heldItem)) {
-                    UserManager.getPlayer(player).getRepairManager().handleSalvage(block.getLocation(), heldItem);
+                    RepairManager repairManager = mcMMOPlayer.getRepairManager();
                     event.setCancelled(true);
-                    player.updateInventory();
+
+                    // Make sure the player knows what he's doing when trying to salvage an enchanted item
+                    if (!(heldItem.getEnchantments().size() > 0) || repairManager.checkConfirmation(blockID, true)) {
+                        repairManager.handleSalvage(block.getLocation(), heldItem);
+                        player.updateInventory();
+                    }
                 }
                 /* BLAST MINING CHECK */
                 else if (miningManager.canDetonate()) {
@@ -302,6 +372,32 @@ public class PlayerListener implements Listener {
                     }
                     else {
                         miningManager.remoteDetonation();
+                    }
+                }
+
+                break;
+
+            case LEFT_CLICK_BLOCK:
+                blockID = block.getTypeId();
+
+                /* REPAIR CHECKS */
+                if (blockID == Repair.repairAnvilId && Permissions.skillEnabled(player, SkillType.REPAIR) && mcMMO.getRepairableManager().isRepairable(heldItem)) {
+                    RepairManager repairManager = mcMMOPlayer.getRepairManager();
+
+                    // Cancel repairing an enchanted item
+                    if (repairManager.checkConfirmation(blockID, false) && Config.getInstance().getRepairConfirmRequired()) {
+                        mcMMOPlayer.setLastAnvilUse(Repair.repairAnvilId, 0);
+                        player.sendMessage(LocaleLoader.getString("Skills.Cancelled", LocaleLoader.getString("Repair.Pretty.Name")));
+                    }
+                }
+                /* SALVAGE CHECKS */
+                else if (blockID == Repair.salvageAnvilId && Permissions.salvage(player) && Repair.isSalvageable(heldItem)) {
+                    RepairManager repairManager = mcMMOPlayer.getRepairManager();
+
+                    // Cancel salvaging an enchanted item
+                    if (repairManager.checkConfirmation(blockID, false) && Config.getInstance().getRepairConfirmRequired()) {
+                        mcMMOPlayer.setLastAnvilUse(Repair.salvageAnvilId, 0);
+                        player.sendMessage(LocaleLoader.getString("Skills.Cancelled", LocaleLoader.getString("Salvage.Pretty.Name")));
                     }
                 }
 
@@ -329,12 +425,17 @@ public class PlayerListener implements Listener {
     public void onPlayerInteract(PlayerInteractEvent event) {
         Player player = event.getPlayer();
 
-        if (Misc.isNPCEntity(player)) {
+        if (Misc.isNPCEntity(player) || player.getGameMode() == GameMode.CREATIVE) {
             return;
         }
 
         ItemStack heldItem = player.getItemInHand();
         McMMOPlayer mcMMOPlayer = UserManager.getPlayer(player);
+
+        // This shouldn't be possible - this is probably a band-aid for a larger issue somewhere else.
+        if (mcMMOPlayer == null) {
+            return;
+        }
 
         switch (event.getAction()) {
             case RIGHT_CLICK_BLOCK:
@@ -434,19 +535,25 @@ public class PlayerListener implements Listener {
 
         McMMOPlayer mcMMOPlayer = UserManager.getPlayer(player);
 
+        if (mcMMOPlayer == null) {
+            mcMMO.p.debug(player.getName() + " is currently chatting, but has never logged on to the server.");
+            return;
+        }
+
         if (mcMMOPlayer.getPartyChatMode()) {
             Party party = mcMMOPlayer.getParty();
 
             if (party == null) {
+                mcMMOPlayer.togglePartyChat();
                 player.sendMessage(LocaleLoader.getString("Commands.Party.None"));
                 return;
             }
 
-            ChatManager.handlePartyChat(plugin, party, player.getName(), player.getDisplayName(), event.getMessage(), true);
+            ChatManager.handlePartyChat(plugin, party, player.getName(), player.getDisplayName(), event.getMessage(), event.isAsynchronous());
             event.setCancelled(true);
         }
         else if (mcMMOPlayer.getAdminChatMode()) {
-            ChatManager.handleAdminChat(plugin, player.getName(), player.getDisplayName(), event.getMessage(), true);
+            ChatManager.handleAdminChat(plugin, player.getName(), player.getDisplayName(), event.getMessage(), event.isAsynchronous());
             event.setCancelled(true);
         }
     }

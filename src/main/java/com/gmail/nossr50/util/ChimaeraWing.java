@@ -13,14 +13,20 @@ import org.bukkit.inventory.ShapelessRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.util.Vector;
 
+import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.config.Config;
+import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.metrics.MetricsManager;
+import com.gmail.nossr50.runnables.items.ChimaeraWingWarmup;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.CombatUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
 
 public final class ChimaeraWing {
+    private static McMMOPlayer mcMMOPlayer;
+    private static Location location;
+
     private ChimaeraWing() {}
 
     /**
@@ -35,68 +41,100 @@ public final class ChimaeraWing {
             return;
         }
 
-        Location location = player.getLocation();
+        if (!Permissions.chimaeraWing(player)) {
+            player.sendMessage(LocaleLoader.getString("mcMMO.NoPermission"));
+            return;
+        }
+
+        mcMMOPlayer = UserManager.getPlayer(player);
+
+        location = player.getLocation();
         int amount = inHand.getAmount();
-        long recentlyHurt = UserManager.getPlayer(player).getRecentlyHurt();
-        long lastChimaeraWing = (UserManager.getPlayer(player).getLastChimaeraTeleport());
+        long recentlyHurt = mcMMOPlayer.getRecentlyHurt();
+        long lastTeleport = mcMMOPlayer.getLastTeleport();
 
-        if (Permissions.chimaeraWing(player) && ItemUtils.isChimaeraWing(inHand)) {
-            if (!SkillUtils.cooldownOver(lastChimaeraWing * Misc.TIME_CONVERSION_FACTOR, Config.getInstance().getChimaeraCooldown(), player)) {
-                player.sendMessage(ChatColor.RED + "You need to wait before you can use this again! " + ChatColor.YELLOW + "(" + SkillUtils.calculateTimeLeft(lastChimaeraWing * Misc.TIME_CONVERSION_FACTOR, Config.getInstance().getChimaeraCooldown(), player) + ")"); //TODO Locale!
+        if (mcMMOPlayer.getTeleportCommenceLocation() != null) {
+            return;
+        }
+
+        if (Config.getInstance().getChimaeraCooldown() > 0 && !SkillUtils.cooldownOver(lastTeleport * Misc.TIME_CONVERSION_FACTOR, Config.getInstance().getChimaeraCooldown(), player)) {
+            player.sendMessage(LocaleLoader.getString("Item.Generic.Wait", SkillUtils.calculateTimeLeft(lastTeleport * Misc.TIME_CONVERSION_FACTOR, Config.getInstance().getChimaeraCooldown(), player)));
+            return;
+        }
+
+        int recentlyhurt_cooldown = Config.getInstance().getChimaeraRecentlyHurtCooldown();
+
+        if (!SkillUtils.cooldownOver(recentlyHurt * Misc.TIME_CONVERSION_FACTOR, recentlyhurt_cooldown, player)) {
+            player.sendMessage(LocaleLoader.getString("Item.Injured.Wait", SkillUtils.calculateTimeLeft(recentlyHurt * Misc.TIME_CONVERSION_FACTOR, recentlyhurt_cooldown, player)));
+            return;
+        }
+
+        if (amount < Config.getInstance().getChimaeraUseCost()) {
+            player.sendMessage(LocaleLoader.getString("Skills.NeedMore", LocaleLoader.getString("Item.ChimaeraWing.Name")));
+            return;
+        }
+
+        if (Config.getInstance().getChimaeraPreventUseUnderground()) {
+            if (location.getY() < player.getWorld().getHighestBlockYAt(location)) {
+                player.setItemInHand(new ItemStack(getChimaeraWing(amount - Config.getInstance().getChimaeraUseCost())));
+                player.sendMessage(LocaleLoader.getString("Item.ChimaeraWing.Fail"));
+                player.setVelocity(new Vector(0, 0.5D, 0));
+                CombatUtils.dealDamage(player, Misc.getRandom().nextInt(player.getHealth() - 10));
+                mcMMOPlayer.actualizeLastTeleport();
                 return;
             }
+        }
 
-            if (!SkillUtils.cooldownOver(recentlyHurt * Misc.TIME_CONVERSION_FACTOR, 60, player)) {
-                player.sendMessage(LocaleLoader.getString("Item.Injured.Wait", SkillUtils.calculateTimeLeft(recentlyHurt * Misc.TIME_CONVERSION_FACTOR, 60, player)));
-                return;
-            }
+        mcMMOPlayer.actualizeTeleportCommenceLocation(player);
 
-            if (amount < Config.getInstance().getChimaeraUseCost()) {
-                player.sendMessage(LocaleLoader.getString("Skills.NeedMore", "Chimaera Wings")); //TODO Locale!
-                return;
-            }
+        long warmup = Config.getInstance().getChimaeraWarmup();
 
-            player.setItemInHand(new ItemStack(getChimaeraWing(amount - Config.getInstance().getChimaeraUseCost())));
-
-            if (Config.getInstance().getChimaeraPreventUseUnderground()) {
-
-                if (location.getY() < player.getWorld().getHighestBlockYAt(location)) {
-                    player.sendMessage(LocaleLoader.getString("Item.ChimaeraWing.Fail"));
-                    player.setVelocity(new Vector(0, 0.5D, 0));
-                    CombatUtils.dealDamage(player, Misc.getRandom().nextInt(player.getHealth() - 10));
-                    UserManager.getPlayer(player).actualizeLastChimaeraTeleport();
-                    return;
-                }
-            }
-
-            if (player.getBedSpawnLocation() != null) {
-                player.teleport(player.getBedSpawnLocation());
-            }
-            else {
-                Location spawnLocation = player.getWorld().getSpawnLocation();
-                if (spawnLocation.getBlock().getType() == Material.AIR) {
-                    player.teleport(spawnLocation);
-                }
-                else {
-                    player.teleport(player.getWorld().getHighestBlockAt(spawnLocation).getLocation());
-                }
-            }
-
-            UserManager.getPlayer(player).actualizeLastChimaeraTeleport();
-            MetricsManager.chimeraWingUsed();
-            player.playSound(location, Sound.BAT_TAKEOFF, Misc.BAT_VOLUME, Misc.BAT_PITCH);
-            player.sendMessage(LocaleLoader.getString("Item.ChimaeraWing.Pass"));
+        if (warmup > 0) {
+            player.sendMessage(LocaleLoader.getString("Teleport.Commencing", warmup));
+            new ChimaeraWingWarmup(mcMMOPlayer).runTaskLater(mcMMO.p, 20 * warmup);
+        }
+        else {
+            chimaeraExecuteTeleport();
         }
     }
 
+    public static void chimaeraExecuteTeleport() {
+        Player player = mcMMOPlayer.getPlayer();
+
+        if (player.getBedSpawnLocation() != null) {
+            player.teleport(player.getBedSpawnLocation());
+        }
+        else {
+            Location spawnLocation = player.getWorld().getSpawnLocation();
+            if (spawnLocation.getBlock().getType() == Material.AIR) {
+                player.teleport(spawnLocation);
+            }
+            else {
+                player.teleport(player.getWorld().getHighestBlockAt(spawnLocation).getLocation());
+            }
+        }
+
+        player.setItemInHand(new ItemStack(getChimaeraWing(player.getItemInHand().getAmount() - Config.getInstance().getChimaeraUseCost())));
+        UserManager.getPlayer(player).actualizeLastTeleport();
+        if (Config.getInstance().getStatsTrackingEnabled()) {
+            MetricsManager.chimeraWingUsed();
+        }
+        player.playSound(location, Sound.BAT_TAKEOFF, Misc.BAT_VOLUME, Misc.BAT_PITCH);
+        player.sendMessage(LocaleLoader.getString("Item.ChimaeraWing.Pass"));
+    }
+
     public static ItemStack getChimaeraWing(int amount) {
-        ItemStack itemStack = new ItemStack(Material.FEATHER, amount);
+        Material ingredient = Material.getMaterial(Config.getInstance().getChimaeraItemId());
+        ItemStack itemStack = new ItemStack(ingredient, amount);
+
         ItemMeta itemMeta = itemStack.getItemMeta();
-        itemMeta.setDisplayName(ChatColor.GOLD + "Chimaera Wing"); //TODO Locale!
+        itemMeta.setDisplayName(ChatColor.GOLD + LocaleLoader.getString("Item.ChimaeraWing.Name"));
+
         List<String> itemLore = new ArrayList<String>();
         itemLore.add("mcMMO Item");
-        itemLore.add(ChatColor.GRAY + "Teleports you to your bed."); //TODO Locale!
+        itemLore.add(LocaleLoader.getString("Item.ChimaeraWing.Lore"));
         itemMeta.setLore(itemLore);
+
         itemStack.setItemMeta(itemMeta);
         return itemStack;
     }

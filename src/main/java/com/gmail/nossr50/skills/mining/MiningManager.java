@@ -10,6 +10,7 @@ import org.bukkit.block.BlockState;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TNTPrimed;
+import org.bukkit.metadata.FixedMetadataValue;
 
 import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.config.Config;
@@ -18,6 +19,7 @@ import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.AbilityType;
 import com.gmail.nossr50.datatypes.skills.SkillType;
 import com.gmail.nossr50.locale.LocaleLoader;
+import com.gmail.nossr50.runnables.skills.AbilityCooldownTask;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.skills.mining.BlastMining.Tier;
 import com.gmail.nossr50.util.BlockUtils;
@@ -100,13 +102,14 @@ public class MiningManager extends SkillManager{
         SkillUtils.sendSkillMessage(player, AbilityType.BLAST_MINING.getAbilityPlayer(player));
         player.sendMessage(LocaleLoader.getString("Mining.Blast.Boom"));
 
-        mcMMO.p.addToTNTTracker(tnt.getEntityId(), player.getName());
+        tnt.setMetadata(mcMMO.tntMetadataKey, new FixedMetadataValue(mcMMO.p, player.getName()));
         tnt.setFuseTicks(0);
         targetBlock.setData((byte) 0x0);
         targetBlock.setType(Material.AIR);
 
         getProfile().setSkillDATS(AbilityType.BLAST_MINING, System.currentTimeMillis());
         mcMMOPlayer.setAbilityInformed(AbilityType.BLAST_MINING, false);
+        new AbilityCooldownTask(mcMMOPlayer, AbilityType.BLAST_MINING).runTaskLaterAsynchronously(mcMMO.p, AbilityType.BLAST_MINING.getCooldown());
     }
 
     /**
@@ -138,13 +141,13 @@ public class MiningManager extends SkillManager{
 
         for (BlockState blockState : ores) {
             if (Misc.getRandom().nextFloat() < (yield + oreBonus)) {
-                if (!mcMMO.placeStore.isTrue(blockState)) {
+                if (!mcMMO.getPlaceStore().isTrue(blockState)) {
                     xp += Mining.getBlockXp(blockState);
                 }
 
                 Misc.dropItem(blockState.getLocation(), blockState.getData().toItemStack(1)); // Initial block that would have been dropped
 
-                if (!mcMMO.placeStore.isTrue(blockState)) {
+                if (!mcMMO.getPlaceStore().isTrue(blockState)) {
                     for (int i = 1; i < dropMultiplier; i++) {
                         Mining.handleSilkTouchDrops(blockState); // Bonus drops - should drop the block & not the items
                     }
@@ -155,7 +158,7 @@ public class MiningManager extends SkillManager{
         if (debrisYield > 0) {
             for (BlockState blockState : debris) {
                 if (Misc.getRandom().nextFloat() < debrisYield) {
-                    Misc.dropItem(blockState.getLocation(), blockState.getData().toItemStack(1));
+                    Misc.dropItems(blockState.getLocation(), blockState.getBlock().getDrops());
                 }
             }
         }

@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.bukkit.GameMode;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
@@ -19,6 +20,7 @@ import com.gmail.nossr50.datatypes.spout.huds.McMMOHud;
 import com.gmail.nossr50.events.experience.McMMOPlayerXpGainEvent;
 import com.gmail.nossr50.party.PartyManager;
 import com.gmail.nossr50.party.ShareHandler;
+import com.gmail.nossr50.runnables.skills.AbilityDisableTask;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
 import com.gmail.nossr50.skills.archery.ArcheryManager;
@@ -69,7 +71,9 @@ public class McMMOPlayer {
 
     private boolean abilityUse = true;
     private boolean placedRepairAnvil;
+    private int     lastRepairClick;
     private boolean placedSalvageAnvil;
+    private int     lastSalvageClick;
     private boolean godMode;
 
     private Map<AbilityType, Boolean> abilityMode     = new HashMap<AbilityType, Boolean>();
@@ -79,8 +83,11 @@ public class McMMOPlayer {
     private Map<ToolType, Integer> toolATS  = new HashMap<ToolType, Integer>();
 
     private int recentlyHurt;
-    private int chimaeraWing;
     private int respawnATS;
+    private int teleportLastUse;
+    private Location teleportCommence;
+
+    private boolean isUsingUnarmed;
 
     public McMMOPlayer(Player player) {
         String playerName = player.getName();
@@ -176,7 +183,8 @@ public class McMMOPlayer {
      */
     public void resetAbilityMode() {
         for (AbilityType ability : AbilityType.values()) {
-            setAbilityMode(ability, false);
+            // Correctly disable and handle any special deactivate code
+            new AbilityDisableTask(this, ability).run();
         }
     }
 
@@ -300,21 +308,32 @@ public class McMMOPlayer {
     }
 
     /*
-     * Chimaera Wing
+     * Teleportation cooldown & warmup
      */
 
-    public int getLastChimaeraTeleport() {
-        return chimaeraWing;
+    public int getLastTeleport() {
+        return teleportLastUse;
     }
 
-    public void setLastChimaeraTeleport(int value) {
-        chimaeraWing = value;
+    public void setLastTeleport(int value) {
+        teleportLastUse = value;
     }
 
-    public void actualizeLastChimaeraTeleport() {
-        chimaeraWing = (int) (System.currentTimeMillis() / Misc.TIME_CONVERSION_FACTOR);
+    public void actualizeLastTeleport() {
+        teleportLastUse = (int) (System.currentTimeMillis() / Misc.TIME_CONVERSION_FACTOR);
     }
 
+    public Location getTeleportCommenceLocation() {
+        return teleportCommence;
+    }
+
+    public void setTeleportCommenceLocation(Location location) {
+        teleportCommence = location;
+    }
+
+    public void actualizeTeleportCommenceLocation(Player player) {
+        setTeleportCommenceLocation(player.getLocation());
+    }
 
     /*
      * Exploit Prevention
@@ -351,6 +370,42 @@ public class McMMOPlayer {
 
         if (anvilId == Repair.salvageAnvilId) {
             placedSalvageAnvil = !placedSalvageAnvil;
+        }
+    }
+
+    /*
+     * Repair Anvil Usage
+     */
+
+    public int getLastAnvilUse(int anvilId) {
+        if (anvilId == Repair.repairAnvilId) {
+            return lastRepairClick;
+        }
+
+        if (anvilId == Repair.salvageAnvilId) {
+            return lastSalvageClick;
+        }
+
+        return 0;
+    }
+
+    public void setLastAnvilUse(int anvilId, int value) {
+        if (anvilId == Repair.repairAnvilId) {
+            lastRepairClick = value;
+        }
+
+        if (anvilId == Repair.salvageAnvilId) {
+            lastSalvageClick = value;
+        }
+    }
+
+    public void actualizeLastAnvilUse(int anvilId) {
+        if (anvilId == Repair.repairAnvilId) {
+            lastRepairClick = (int) (System.currentTimeMillis() / Misc.TIME_CONVERSION_FACTOR);
+        }
+
+        if (anvilId == Repair.salvageAnvilId) {
+            lastSalvageClick = (int) (System.currentTimeMillis() / Misc.TIME_CONVERSION_FACTOR);
         }
     }
 
@@ -405,7 +460,7 @@ public class McMMOPlayer {
      * @param skillType Skill being used
      * @param xp Experience amount to process
      */
-    public void beginXpGain(SkillType skillType, int xp) {
+    public void beginXpGain(SkillType skillType, float xp) {
         if (xp == 0) {
             return;
         }
@@ -436,7 +491,7 @@ public class McMMOPlayer {
      * @param skillType Skill being used
      * @param xp Experience amount to process
      */
-    public void beginUnsharedXpGain(SkillType skillType, int xp) {
+    public void beginUnsharedXpGain(SkillType skillType, float xp) {
         xp = modifyXpGain(skillType, xp);
 
         applyXpGain(skillType, xp);
@@ -448,19 +503,20 @@ public class McMMOPlayer {
      * @param skillType Skill being used
      * @param xp Experience amount to add
      */
-    public void applyXpGain(SkillType skillType, int xp) {
+    public void applyXpGain(SkillType skillType, float xp) {
         if (skillType.isChildSkill()) {
             Set<SkillType> parentSkills = FamilyTree.getParents(skillType);
 
             for (SkillType parentSkill : parentSkills) {
-                if (Permissions.skillEnabled(player, parentSkill)) {
-                    applyXpGain(parentSkill, xp / parentSkills.size());
-                }
+                applyXpGain(parentSkill, xp / parentSkills.size());
             }
 
             return;
         }
-
+        
+        if (!Permissions.skillEnabled(player, skillType)) {
+            return;
+        }
 
         McMMOPlayerXpGainEvent event = new McMMOPlayerXpGainEvent(player, skillType, xp);
         mcMMO.p.getServer().getPluginManager().callEvent(event);
@@ -469,7 +525,7 @@ public class McMMOPlayer {
             return;
         }
 
-        profile.setSkillXpLevel(skillType, profile.getSkillXpLevel(skillType) + event.getXpGained());
+        profile.setSkillXpLevel(skillType, profile.getSkillXpLevelRaw(skillType) + event.getRawXpGained());
 
         McMMOHud spoutHud = profile.getSpoutHud();
 
@@ -477,6 +533,7 @@ public class McMMOPlayer {
             spoutHud.setLastGained(skillType);
         }
 
+        isUsingUnarmed = skillType == SkillType.UNARMED;
         SkillUtils.xpCheckSkill(skillType, player, profile);
     }
 
@@ -628,6 +685,10 @@ public class McMMOPlayer {
         partyChatMode = !partyChatMode;
     }
 
+    public boolean isUsingUnarmed() {
+        return isUsingUnarmed;
+    }
+
     /**
      * Modifies an experience gain using skill modifiers, global rate and perks
      *
@@ -635,16 +696,12 @@ public class McMMOPlayer {
      * @param xp Experience amount to process
      * @return Modified experience
      */
-    private int modifyXpGain(SkillType skillType, int xp) {
-        if (player.getGameMode() == GameMode.CREATIVE) {
+    private float modifyXpGain(SkillType skillType, float xp) {
+        if (player.getGameMode() == GameMode.CREATIVE || (skillType.getMaxLevel() < profile.getSkillLevel(skillType) + 1) || (Config.getInstance().getPowerLevelCap() < getPowerLevel() + 1)) {
             return 0;
         }
 
-        if ((skillType.getMaxLevel() < profile.getSkillLevel(skillType) + 1) || (Config.getInstance().getPowerLevelCap() < getPowerLevel() + 1)) {
-            return 0;
-        }
-
-        xp = (int) (xp / skillType.getXpModifier() * Config.getInstance().getExperienceGainsGlobalMultiplier());
+        xp = (float) (xp / skillType.getXpModifier() * Config.getInstance().getExperienceGainsGlobalMultiplier());
 
         if (Config.getInstance().getToolModsEnabled()) {
             ItemStack item = player.getItemInHand();

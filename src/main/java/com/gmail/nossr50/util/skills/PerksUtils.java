@@ -26,6 +26,10 @@ public final class PerksUtils {
     }
 
     public static int handleActivationPerks(Player player, int ticks, int maxTicks) {
+        if (maxTicks != 0) {
+            ticks = Math.min(ticks, maxTicks);
+        }
+
         if (Permissions.twelveSecondActivationBoost(player)) {
             ticks += 12;
         }
@@ -36,14 +40,10 @@ public final class PerksUtils {
             ticks += 4;
         }
 
-        if (maxTicks != 0) {
-            ticks = Math.min(ticks, maxTicks);
-        }
-
         return ticks;
     }
 
-    public static int handleXpPerks(Player player, int xp) {
+    public static float handleXpPerks(Player player, float xp) {
         if (Permissions.quadrupleXp(player)) {
             xp *= 4;
         }

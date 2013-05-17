@@ -10,31 +10,71 @@
 General:
     Locale: en_US
     MOTD_Enabled: true
-    #Amount of time (in minutes) to wait between saves of player information
+    # Amount of time (in minutes) to wait between saves of player information
     Save_Interval: 10
-    #Allow mcMMO to report on basic anonymous usage
+    # Allow mcMMO to report on basic anonymous usage
     Stats_Tracking: true
-    #Allow mcMMO to check if a new version is available
+    # Allow mcMMO to check if a new version is available
     Update_Check: true
     Prefer_Beta: false
-    #Allow mcMMO to inform other plugins of damage being dealt
+    # Allow mcMMO to inform other plugins of damage being dealt
     Event_Callback: true
-    #Allow mcMMO to create zip backups for flatfile data on shutdown.
+    # Allow mcMMO to create zip backups for flatfile data on shutdown.
     Generate_Backups: true
     Power_Level_Cap: 0
-    #Should mcMMO print out debug messages?
+    # Should mcMMO print out debug messages?
     Verbose_Logging: false
-    #Should mcMMO over-write configs to update, or make new ones ending in .new?
+    # Should mcMMO over-write configs to update, or make new ones ending in .new?
     Config_Update_Overwrite: true
+    # Enable potato easter egg?
+    Potato_Explosion_Enabled: false
+    Potato_Explosion_Chance: 1
+
+Scoreboards:
+    # Should mcMMO use scoreboards for /inspect?
+    # Amount of time (in seconds) to display. To display permanently, set to -1
+    Inspect:
+        Use: true
+        Display_Time: 10
+    # Should mcMMO use scoreboards for /mcrank?
+    # Amount of time (in seconds) to display. To display permanently, set to -1
+    Mcrank:
+        Use: true
+        Display_Time: 10
+    # Should mcMMO use scoreboards for /mcstats?
+    # Amount of time (in seconds) to display. To display permanently, set to -1
+    Mcstats:
+        Use: true
+        Display_Time: 10
+    # Should mcMMO use scoreboards for /mctop?
+    # Amount of time (in seconds) to display. To display permanently, set to -1
+    Mctop:
+        Use: true
+        Display_Time: 10
+    # Should mcMMO use scoreboards for /skillname (/mining, /fishing, etc.)?
+    # Amount of time (in seconds) to display. To display permanently, set to -1
+    Skillname:
+        Use: true
+        Display_Time: 10
+    # Should mcMMO display power levels on scoreboards?
+    Power_Level:
+        Use: true
+
+Mob_Healthbar:
+    # Default display for mob health bars - HEARTS, BAR, or DISABLED
+    Display_Type: HEARTS
+    # Amount of time (in seconds) to display. To display permanently, set to -1
+    Display_Time: 3
 
 Database_Purging:
-    #Amount of time (in hours) to wait between database purging
-    #To only run at server start, set to 0
-    #To never run, set to -1
+    # Amount of time (in hours) to wait between database purging
+    # To only run at server start, set to 0
+    # To never run, set to -1
     Purge_Interval: -1
-    #Any user who hasn't connected in this many months will be purged from the database
-    #To never purge old users, set to -1
+    # Any user who hasn't connected in this many months will be purged from the database
+    # To never purge old users, set to -1
     Old_User_Cutoff: 6
+
 #
 #  Settings for using a mySQL database
 ###
@@ -48,6 +88,7 @@ MySQL:
     Server:
         Port: 3306
         Address: localhost
+
 #
 #  Settings for Hardcore mode
 ###
@@ -73,6 +114,8 @@ Items:
     Chimaera_Wing:
         Enabled: true
         Cooldown: 240
+        Warmup: 5
+        RecentlyHurt_Cooldown: 60
         Prevent_Use_Underground: true
         Use_Cost: 1
         Recipe_Cost: 5
@@ -82,13 +125,13 @@ Items:
 #  Settings for Parties
 ###
 Party:
-    #Amount of time (in hours) to wait between automatically kicking old party members
-    #To only run at server start, set to 0
-    #To never kick old users, set to -1
+    # Amount of time (in hours) to wait between automatically kicking old party members
+    # To only run at server start, set to 0
+    # To never kick old users, set to -1
     AutoKick_Interval: 12
-    #Any user who hasn't connected in this many days will get kicked from their party
+    # Any user who hasn't connected in this many days will get kicked from their party
     Old_Party_Member_Cutoff: 7
-    #Settings for party share modes
+    # Settings for party share modes
     Sharing:
         ExpShare_enabled: true
         ExpShare_bonus_base: 1.1
@@ -166,6 +209,8 @@ Skills:
         Salvage_Anvil_ID: 41
         Salvage_tools: true
         Salvage_armor: true
+        # Ask for a confirmation when a player tries to repair an enchanted item
+        Confirm_Required: true
     Smelting:
         Level_Cap: 0
     Swords:
@@ -235,8 +280,11 @@ Double_Drops:
 ###
 Experience:
     Gains:
+        # Experience gained from mobs not naturally spawned will get multiplied by this value.  0 by default.
         Mobspawners:
-            Enabled: false
+            Multiplier: 0
+
+        # Experience gained in every skill will get multiplied by this value. 1.0 by default, 2.0 means two times as much
         Multiplier:
             PVP: 1.0
             Global: 1.0
@@ -244,7 +292,9 @@ Experience:
         Rewards: true
     Formula:
         Curve_Modifier: 20
-        Multiplier:
+
+        # Experience gained will get divided by these values. 1.0 by default, 2.0 means two times lower
+        Modifier:
             Swords: 1.0
             Taming: 1.0
             Acrobatics: 1.0
@@ -335,30 +385,33 @@ Experience:
             Silverfish: 3.0
             Blaze: 3.0
             Magma_Cube: 2.0
-            Ender_Dragon: 8.0
-            Wither: 7.0
-            Witch: 4.0
             Iron_Golem: 2.0
             Wither_Skeleton: 4.0
+
 #
 #  Settings for commands
 ###
 Commands:
     mcmmo:
         Donate_Message: true
+    inspect:
+        Max_Distance: 30
     ptp:
-        Cooldown: 30
+        Cooldown: 120
+        Warmup: 5
+        RecentlyHurt_Cooldown: 60
         Confirm_Required: true
         Request_Timeout: 300
-        #If true, require players to have a mcmmo.commands.ptp.world.[WorldName] permission
-        #to teleport to, from, or within any given world.
+        # If true, require players to have a mcmmo.commands.ptp.world.[WorldName] permission
+        # to teleport to, from, or within any given world.
         World_Based_Permissions: false
     p:
-        #Allow mcMMO to use player display names in chat instead of their usernames
+        # Allow mcMMO to use player display names in chat instead of their usernames
         Use_Display_Names: true
     a:
-        #Allow mcMMO to use player display names in chat instead of their usernames
+        # Allow mcMMO to use player display names in chat instead of their usernames
         Use_Display_Names: true
+
 #
 #  Settings for particles
 ###
@@ -366,8 +419,16 @@ Particles:
     # These settings determine if fireworks should get launched when a player activates/deactivates an ability
     Ability_Activation: true
     Ability_Deactivation: true
-    
+
+    # Determines if the fireworks should be a large ball or a small one
+    LargeFireworks: true
+
     # Use particle effect when these abilities trigger
     Dodge: true
     Bleed: true
     Greater_Impact: true
+
+    # These settings determine if fireworks should get launched when a player levels-up,
+    # this will happen by default for every 100 levels.
+    LevelUp_Enabled: true
+    LevelUp_Tier: 100

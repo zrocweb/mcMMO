@@ -1,8 +1,11 @@
 package com.gmail.nossr50.util.commands;
 
+import java.util.List;
+
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import com.gmail.nossr50.config.Config;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.SkillType;
@@ -13,7 +16,12 @@ import com.gmail.nossr50.util.StringUtils;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.SkillUtils;
 
+import com.google.common.collect.ImmutableList;
+
 public final class CommandUtils {
+    public static final List<String> TRUE_FALSE_OPTIONS = ImmutableList.of("on", "off", "true", "false", "enabled", "disabled");
+    public static final List<String> RESET_OPTIONS = ImmutableList.of("clear", "reset");
+
     private CommandUtils() {}
 
     public static boolean isChildSkill(CommandSender sender, SkillType skill) {
@@ -39,7 +47,7 @@ public final class CommandUtils {
     }
 
     public static boolean tooFar(CommandSender sender, Player target, boolean hasPermission) {
-        if (sender instanceof Player && !Misc.isNear(((Player) sender).getLocation(), target.getLocation(), 5.0) && !hasPermission) {
+        if (sender instanceof Player && !Misc.isNear(((Player) sender).getLocation(), target.getLocation(), Config.getInstance().getInspectDistance()) && !hasPermission) {
             sender.sendMessage(LocaleLoader.getString("Inspect.TooFar"));
             return true;
         }
@@ -67,17 +75,17 @@ public final class CommandUtils {
 
     public static boolean checkPlayerExistence(CommandSender sender, String playerName, McMMOPlayer mcMMOPlayer) {
         if (mcMMOPlayer != null) {
-            return false;
+            return true;
         }
 
         PlayerProfile playerProfile = new PlayerProfile(playerName, false);
 
         if (unloadedProfile(sender, playerProfile)) {
-            return true;
+            return false;
         }
 
         sender.sendMessage(LocaleLoader.getString("Commands.Offline"));
-        return true;
+        return false;
     }
 
     public static boolean unloadedProfile(CommandSender sender, PlayerProfile profile) {

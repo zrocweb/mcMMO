@@ -20,12 +20,14 @@ public final class Permissions {
      */
 
     public static boolean motd(Permissible permissible) { return permissible.hasPermission("mcmmo.motd"); }
+    public static boolean mobHealthDisplay(Permissible permissible) { return permissible.hasPermission("mcmmo.mobhealthdisplay"); }
     public static boolean updateNotifications(Permissible permissible) {return permissible.hasPermission("mcmmo.tools.updatecheck"); }
     public static boolean chimaeraWing(Permissible permissible) { return permissible.hasPermission("mcmmo.item.chimaerawing"); }
 
     /* BYPASS */
     public static boolean hardcoreBypass(Permissible permissible) { return permissible.hasPermission("mcmmo.bypass.hardcoremode"); }
     public static boolean arcaneBypass(Permissible permissible) { return permissible.hasPermission("mcmmo.bypass.arcanebypass"); }
+    public static boolean krakenBypass(Permissible permissible) { return permissible.hasPermission("mcmmo.bypass.kraken"); }
 
     /* CHAT */
     public static boolean partyChat(Permissible permissible) { return permissible.hasPermission("mcmmo.chat.partychat"); }
@@ -47,6 +49,9 @@ public final class Permissions {
     public static boolean inspect(Permissible permissible) { return (permissible.hasPermission("mcmmo.commands.inspect")); }
     public static boolean inspectFar(Permissible permissible) { return (permissible.hasPermission("mcmmo.commands.inspect.far")); }
     public static boolean inspectOffline(Permissible permissible) { return (permissible.hasPermission("mcmmo.commands.inspect.offline")); }
+
+    public static boolean kraken(Permissible permissible) { return permissible.hasPermission("mcmmo.commands.kraken"); }
+    public static boolean krakenOthers(Permissible permissible) { return permissible.hasPermission("mcmmo.commands.kraken.others"); }
 
     public static boolean mcability(Permissible permissible) { return (permissible.hasPermission("mcmmo.commands.mcability")); }
     public static boolean mcabilityOthers(Permissible permissible) { return (permissible.hasPermission("mcmmo.commands.mcability.others")); }
@@ -141,7 +146,9 @@ public final class Permissions {
     /* FISHING */
     public static boolean fishermansDiet(Permissible permissible) { return permissible.hasPermission("mcmmo.ability.fishing.fishermansdiet"); }
     public static boolean fishingTreasureHunter(Permissible permissible) { return permissible.hasPermission("mcmmo.ability.fishing.treasures"); }
+    public static boolean iceFishing(Permissible permissible) { return permissible.hasPermission("mcmmo.ability.fishing.icefishing"); }
     public static boolean magicHunter(Permissible permissible) { return permissible.hasPermission("mcmmo.ability.fishing.magic"); }
+    public static boolean masterAngler(Permissible permissible) { return permissible.hasPermission("mcmmo.ability.fishing.masterangler"); }
     public static boolean shake(Permissible permissible) { return permissible.hasPermission("mcmmo.ability.fishing.shakemob"); }
 
     /* HERBALISM */
@@ -189,6 +196,7 @@ public final class Permissions {
     /* TAMING */
     public static boolean beastLore(Permissible permissible) { return permissible.hasPermission("mcmmo.ability.taming.beastlore"); }
     public static boolean callOfTheWild(Permissible permissible) { return permissible.hasPermission("mcmmo.ability.taming.callofthewild"); }
+    public static boolean renamePets(Permissible permissible) { return permissible.hasPermission("mcmmo.ability.taming.callofthewild_renamepets"); }
     public static boolean environmentallyAware(Permissible permissible) { return permissible.hasPermission("mcmmo.ability.taming.environmentallyaware"); }
     public static boolean fastFoodService(Permissible permissible) { return permissible.hasPermission("mcmmo.ability.taming.fastfoodservice"); }
     public static boolean gore(Permissible permissible) { return permissible.hasPermission("mcmmo.ability.taming.gore"); }
@@ -213,10 +221,11 @@ public final class Permissions {
      */
 
     public static boolean party(Permissible permissible) { return permissible.hasPermission("mcmmo.commands.party"); }
-    public static boolean partySubcommand(Permissible permissible, PartySubcommandType subcommand) {return permissible.hasPermission("mcmmo.commands.party." + subcommand.toString().toLowerCase()); }
+    public static boolean partySubcommand(Permissible permissible, PartySubcommandType subcommand) { return permissible.hasPermission("mcmmo.commands.party." + subcommand.toString().toLowerCase()); }
     public static boolean friendlyFire(Permissible permissible) { return permissible.hasPermission("mcmmo.party.friendlyfire"); }
 
     /* TELEPORT */
+    public static boolean partyTeleportSend(Permissible permissible) { return permissible.hasPermission("mcmmo.commands.ptp.send"); }
     public static boolean partyTeleportAccept(Permissible permissible) { return permissible.hasPermission("mcmmo.commands.ptp.accept"); }
     public static boolean partyTeleportAcceptAll(Permissible permissible) { return permissible.hasPermission("mcmmo.commands.ptp.acceptall"); }
     public static boolean partyTeleportToggle(Permissible permissible) { return permissible.hasPermission("mcmmo.commands.ptp.toggle"); }

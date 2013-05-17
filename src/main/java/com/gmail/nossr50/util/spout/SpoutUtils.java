@@ -6,66 +6,135 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
+import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.PluginManager;
 import org.getspout.spoutapi.SpoutManager;
 import org.getspout.spoutapi.event.spout.SpoutCraftEnableEvent;
-import org.getspout.spoutapi.keyboard.Keyboard;
-import org.getspout.spoutapi.player.FileManager;
 import org.getspout.spoutapi.player.SpoutPlayer;
 
 import com.gmail.nossr50.mcMMO;
-import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.spout.SpoutConfig;
+import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.SkillType;
-import com.gmail.nossr50.listeners.SpoutListener;
 import com.gmail.nossr50.locale.LocaleLoader;
+import com.gmail.nossr50.skills.repair.Repair;
 import com.gmail.nossr50.util.StringUtils;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.SkillUtils;
 
 public class SpoutUtils {
-    private static mcMMO plugin = mcMMO.p;
+    // The order of the values is extremely important, a few methods depend on it to work properly
+    protected enum Tier {
+        FOUR(4) {
+            @Override public int getLevel() { return SpoutConfig.getInstance().getNotificationTier4(); }
+            @Override protected Material getAcrobaticsNotificationItem() { return Material.DIAMOND_BOOTS; }
+            @Override protected Material getArcheryNotificationItem() { return Material.BOW; }
+            @Override protected Material getAxesNotificationItem() { return Material.DIAMOND_AXE; }
+            @Override protected Material getExcavationNotificationItem() { return Material.CLAY; }
+            @Override protected Material getFishingNotificationItem() { return Material.FISHING_ROD; }
+            @Override protected Material getHerbalismNotificationItem() { return Material.WATER_LILY; }
+            @Override protected Material getMiningNotificationItem() { return Material.EMERALD_ORE; }
+            @Override protected Material getSwordsNotificationItem() { return Material.DIAMOND_SWORD; }
+            @Override protected Material getTamingNotificationItem() { return Material.BONE; }
+            @Override protected Material getUnarmedNotificationItem() { return Material.DIAMOND_HELMET; }
+            @Override protected Material getWoodcuttingNotificationItem() { return Material.LOG; }},
+        THREE(3) {
+            @Override public int getLevel() { return SpoutConfig.getInstance().getNotificationTier3(); }
+            @Override protected Material getAcrobaticsNotificationItem() { return Material.GOLD_BOOTS; }
+            @Override protected Material getArcheryNotificationItem() { return Material.ARROW; }
+            @Override protected Material getAxesNotificationItem() { return Material.GOLD_AXE; }
+            @Override protected Material getExcavationNotificationItem() { return Material.SAND; }
+            @Override protected Material getFishingNotificationItem() { return Material.COOKED_FISH; }
+            @Override protected Material getHerbalismNotificationItem() { return Material.RED_ROSE; }
+            @Override protected Material getMiningNotificationItem() { return Material.DIAMOND_ORE; }
+            @Override protected Material getSwordsNotificationItem() { return Material.GOLD_SWORD; }
+            @Override protected Material getTamingNotificationItem() { return Material.GRILLED_PORK; }
+            @Override protected Material getUnarmedNotificationItem() { return Material.GOLD_HELMET; }
+            @Override protected Material getWoodcuttingNotificationItem() { return Material.WOOD; }},
+        TWO(2) {
+            @Override public int getLevel() { return SpoutConfig.getInstance().getNotificationTier2(); }
+            @Override protected Material getAcrobaticsNotificationItem() { return Material.IRON_BOOTS; }
+            @Override protected Material getArcheryNotificationItem() { return Material.ARROW; }
+            @Override protected Material getAxesNotificationItem() { return Material.IRON_AXE; }
+            @Override protected Material getExcavationNotificationItem() { return Material.GRAVEL; }
+            @Override protected Material getFishingNotificationItem() { return Material.COOKED_FISH; }
+            @Override protected Material getHerbalismNotificationItem() { return Material.YELLOW_FLOWER; }
+            @Override protected Material getMiningNotificationItem() { return Material.GOLD_ORE; }
+            @Override protected Material getSwordsNotificationItem() { return Material.IRON_SWORD; }
+            @Override protected Material getTamingNotificationItem() { return Material.GRILLED_PORK; }
+            @Override protected Material getUnarmedNotificationItem() { return Material.IRON_HELMET; }
+            @Override protected Material getWoodcuttingNotificationItem() { return Material.LEAVES; }},
+        ONE(1) {
+            @Override public int getLevel() { return SpoutConfig.getInstance().getNotificationTier1(); }
+            @Override protected Material getAcrobaticsNotificationItem() { return Material.CHAINMAIL_BOOTS; }
+            @Override protected Material getArcheryNotificationItem() { return Material.FLINT; }
+            @Override protected Material getAxesNotificationItem() { return Material.STONE_AXE; }
+            @Override protected Material getExcavationNotificationItem() { return Material.GRASS; }
+            @Override protected Material getFishingNotificationItem() { return Material.RAW_FISH; }
+            @Override protected Material getHerbalismNotificationItem() { return Material.CACTUS; }
+            @Override protected Material getMiningNotificationItem() { return Material.IRON_ORE; }
+            @Override protected Material getSwordsNotificationItem() { return Material.STONE_SWORD; }
+            @Override protected Material getTamingNotificationItem() { return Material.PORK; }
+            @Override protected Material getUnarmedNotificationItem() { return Material.CHAINMAIL_HELMET; }
+            @Override protected Material getWoodcuttingNotificationItem() { return Material.SAPLING; }};
 
-    public final static String spoutDirectory = mcMMO.getMainDirectory() + "Resources" + File.separator;
-    public final static String hudDirectory = spoutDirectory + "HUD" + File.separator;
-    public final static String hudStandardDirectory = hudDirectory + "Standard" + File.separator;
-    public final static String hudRetroDirectory = hudDirectory + "Retro" + File.separator;
-    public final static String soundDirectory = spoutDirectory + "Sound" + File.separator;
+        int numerical;
 
-    public static boolean showPowerLevel;
+        private Tier(int numerical) {
+            this.numerical = numerical;
+        }
 
-    private final static SpoutListener spoutListener = new SpoutListener();
-    public static Keyboard menuKey;
+        public int toNumerical() {
+            return numerical;
+        }
+
+        abstract protected int getLevel();
+        abstract protected Material getAcrobaticsNotificationItem();
+        abstract protected Material getArcheryNotificationItem();
+        abstract protected Material getAxesNotificationItem();
+        abstract protected Material getExcavationNotificationItem();
+        abstract protected Material getFishingNotificationItem();
+        abstract protected Material getHerbalismNotificationItem();
+        abstract protected Material getMiningNotificationItem();
+        abstract protected Material getSwordsNotificationItem();
+        abstract protected Material getTamingNotificationItem();
+        abstract protected Material getUnarmedNotificationItem();
+        abstract protected Material getWoodcuttingNotificationItem();
+    }
+
+    private final static String spoutDirectory = mcMMO.getMainDirectory() + "Resources" + File.separator;
+    private final static String hudDirectory = spoutDirectory + "HUD" + File.separator;
+    private final static String hudStandardDirectory = hudDirectory + "Standard" + File.separator;
+    private final static String hudRetroDirectory = hudDirectory + "Retro" + File.separator;
+    private final static String soundDirectory = spoutDirectory + "Sound" + File.separator;
 
     /**
      * Write file to disk.
      *
-     * @param theFileName The name of the file
-     * @param theFilePath The name of the file path
+     * @param fileName The name of the file
+     * @param filePath The name of the file path
      */
-    private static void writeFile(String theFileName, String theFilePath) {
-        InputStream is = null;
-        OutputStream os = null;
+    private static File writeFile(String fileName, String filePath) {
+        File currentFile = new File(filePath + fileName);
+        BufferedOutputStream os = null;
         JarFile jar = null;
 
+        // No point in writing the file again if it already exists.
+        if (currentFile.exists()) {
+            return currentFile;
+        }
+
         try {
-            File currentFile = new File(theFilePath + theFileName);
-
-            // No point in writing the file again if it already exists.
-            if (currentFile.exists()) {
-                return;
-            }
-
             jar = new JarFile(mcMMO.mcmmo);
-            JarEntry entry = jar.getJarEntry("resources/" + theFileName);
-            is = jar.getInputStream(entry);
+
+            @SuppressWarnings("resource")
+            InputStream is = jar.getInputStream(jar.getJarEntry("resources/" + fileName));
 
             byte[] buf = new byte[2048];
             int nbRead;
@@ -75,8 +144,6 @@ public class SpoutUtils {
             while ((nbRead = is.read(buf)) != -1) {
                 os.write(buf, 0, nbRead);
             }
-
-            os.flush();
         }
         catch (FileNotFoundException e) {
             e.printStackTrace();
@@ -85,9 +152,9 @@ public class SpoutUtils {
             e.printStackTrace();
         }
         finally {
-            if (is != null) {
+            if (jar != null) {
                 try {
-                    is.close();
+                    jar.close();
                 }
                 catch (IOException ex) {
                     ex.printStackTrace();
@@ -101,22 +168,17 @@ public class SpoutUtils {
                     ex.printStackTrace();
                 }
             }
-
-            if (jar != null) {
-                try {
-                    jar.close();
-                }
-                catch (IOException ex) {
-                    ex.printStackTrace();
-                }
-            }
         }
+
+        return currentFile;
     }
 
     /**
      * Extract Spout files to the Resources directory.
      */
-    public static void extractFiles() {
+    public static ArrayList<File> extractFiles() {
+        ArrayList<File> files = new ArrayList<File>();
+
         // Setup directories
         new File(spoutDirectory).mkdir();
         new File(hudDirectory).mkdir();
@@ -126,19 +188,19 @@ public class SpoutUtils {
 
         // XP Bar images
         for (int x = 0; x < 255; x++) {
-            String theFileName;
+            String fileName;
 
             if (x < 10) {
-                theFileName = "xpbar_inc00" + x + ".png";
+                fileName = "xpbar_inc00" + x + ".png";
             }
             else if (x < 100) {
-                theFileName = "xpbar_inc0" + x + ".png";
+                fileName = "xpbar_inc0" + x + ".png";
             }
             else {
-                theFileName = "xpbar_inc" + x + ".png";
+                fileName = "xpbar_inc" + x + ".png";
             }
 
-            writeFile(theFileName, hudStandardDirectory);
+            files.add(writeFile(fileName, hudStandardDirectory));
         }
 
         // Standard XP Icons
@@ -147,87 +209,20 @@ public class SpoutUtils {
                 continue;
             }
 
-            String skillTypeString = StringUtils.getCapitalized(skillType.toString());
+            String skillName = StringUtils.getCapitalized(skillType.toString());
 
-            writeFile(skillTypeString + ".png", hudStandardDirectory);
-            writeFile(skillTypeString + "_r.png", hudRetroDirectory);
+            files.add(writeFile(skillName + ".png", hudStandardDirectory));
+            files.add(writeFile(skillName + "_r.png", hudRetroDirectory));
         }
 
         // Blank icons
-        writeFile("Icon.png", hudStandardDirectory);
-        writeFile("Icon_r.png", hudRetroDirectory);
+        files.add(writeFile("Icon.png", hudStandardDirectory));
+        files.add(writeFile("Icon_r.png", hudRetroDirectory));
 
         // Sound FX
-        writeFile("level.wav", soundDirectory);
-    }
-
-    /**
-     * Setup Spout config options
-     */
-    public static void setupSpoutConfigs() {
-        showPowerLevel = SpoutConfig.getInstance().getShowPowerLevel();
-        String temp = SpoutConfig.getInstance().getMenuKey();
-
-        for (Keyboard x : Keyboard.values()) {
-            if (x.toString().equalsIgnoreCase(temp)) {
-                menuKey = x;
-            }
-        }
-
-        if (menuKey == null) {
-            mcMMO.p.getLogger().warning("Invalid KEY for Menu.Key, using KEY_M");
-            menuKey = Keyboard.KEY_M;
-        }
-    }
-
-    /**
-     * Get all the Spout files in the Resources folder.
-     *
-     * @return a list of all files is the Resources folder
-     */
-    public static ArrayList<File> getFiles() {
-        ArrayList<File> files = new ArrayList<File>();
-
-        // XP BAR
-        for (int x = 0; x < 255; x++) {
-            if (x < 10) {
-                files.add(new File(hudStandardDirectory + "xpbar_inc00" + x + ".png"));
-            }
-            else if (x < 100) {
-                files.add(new File(hudStandardDirectory + "xpbar_inc0" + x + ".png"));
-            }
-            else {
-                files.add(new File(hudStandardDirectory + "xpbar_inc" + x + ".png"));
-            }
-        }
-
-        // Standard XP Icons
-        for (SkillType skillType : SkillType.values()) {
-            if (skillType.isChildSkill()) {
-                continue;
-            }
-
-            String skillTypeString = StringUtils.getCapitalized(skillType.toString());
-
-            files.add(new File(hudStandardDirectory + skillTypeString + ".png"));
-            files.add(new File(hudRetroDirectory + skillTypeString + "_r.png"));
-        }
-
-        // Blank icons
-        files.add(new File(hudStandardDirectory + "Icon.png"));
-        files.add(new File(hudRetroDirectory + "Icon_r.png"));
-
-        // Level SFX
-        files.add(new File(soundDirectory + "level.wav"));
+        files.add(writeFile("level.wav", soundDirectory));
 
         return files;
-    }
-
-    /**
-     * Register custom Spout events.
-     */
-    public static void registerCustomEvent() {
-        plugin.getServer().getPluginManager().registerEvents(spoutListener, plugin);
     }
 
     /**
@@ -238,334 +233,185 @@ public class SpoutUtils {
      */
     public static void levelUpNotification(SkillType skillType, SpoutPlayer spoutPlayer) {
         PlayerProfile profile = UserManager.getPlayer(spoutPlayer).getProfile();
-        int notificationTier = getNotificationTier(profile.getSkillLevel(skillType));
-        Material mat = null;
+        int skillLevel = profile.getSkillLevel(skillType);
+        Material notificationItem;
 
         switch (skillType) {
-            case TAMING:
-                switch (notificationTier) {
-                    case 1:
-                    case 2:
-                        mat = Material.PORK;
-                        break;
-
-                    case 3:
-                    case 4:
-                        mat = Material.GRILLED_PORK;
-                        break;
-
-                    case 5:
-                        mat = Material.BONE;
-                        break;
-
-                    default:
-                        break;
-                }
-
-                break;
-
-            case MINING:
-                switch (notificationTier) {
-                    case 1:
-                        mat = Material.COAL_ORE;
-                        break;
-
-                    case 2:
-                        mat = Material.IRON_ORE;
-                        break;
-
-                    case 3:
-                        mat = Material.GOLD_ORE;
-                        break;
-
-                    case 4:
-                        mat = Material.DIAMOND_ORE;
-                        break;
-
-                    case 5:
-                        mat = Material.EMERALD_ORE;
-                        break;
-
-                    default:
-                        break;
-                }
-
-                break;
-
-            case WOODCUTTING:
-                switch (notificationTier) {
-                    case 1:
-                        mat = Material.STICK;
-                        break;
-
-                    case 2:
-                    case 3:
-                        mat = Material.WOOD;
-                        break;
-
-                    case 4:
-                    case 5:
-                        mat = Material.LOG;
-                        break;
-
-                    default:
-                        break;
-                }
-
-                break;
-
-            case REPAIR:
-                mat = Material.ANVIL;
-                break;
-
-            case HERBALISM:
-                switch (notificationTier) {
-                    case 1:
-                        mat = Material.YELLOW_FLOWER;
-                        break;
-
-                    case 2:
-                        mat = Material.RED_ROSE;
-                        break;
-
-                    case 3:
-                        mat = Material.BROWN_MUSHROOM;
-                        break;
-
-                    case 4:
-                        mat = Material.RED_MUSHROOM;
-                        break;
-
-                    case 5:
-                        mat = Material.PUMPKIN;
-                        break;
-
-                    default:
-                        break;
-                }
-
-                break;
-
             case ACROBATICS:
-                switch (notificationTier) {
-                    case 1:
-                        mat = Material.LEATHER_BOOTS;
-                        break;
-
-                    case 2:
-                        mat = Material.CHAINMAIL_BOOTS;
-                        break;
-
-                    case 3:
-                        mat = Material.IRON_BOOTS;
-                        break;
-
-                    case 4:
-                        mat = Material.GOLD_BOOTS;
-                        break;
-
-                    case 5:
-                        mat = Material.DIAMOND_BOOTS;
-                        break;
-
-                    default:
-                        break;
-                }
-
-                break;
-
-            case SWORDS:
-                switch (notificationTier) {
-                    case 1:
-                        mat = Material.WOOD_SWORD;
-                        break;
-
-                    case 2:
-                        mat = Material.STONE_SWORD;
-                        break;
-
-                    case 3:
-                        mat = Material.IRON_SWORD;
-                        break;
-
-                    case 4:
-                        mat = Material.GOLD_SWORD;
-                        break;
-
-                    case 5:
-                        mat = Material.DIAMOND_SWORD;
-                        break;
-
-                    default:
-                        break;
-                }
-
+                notificationItem = getAcrobaticsNotificationItem(skillLevel);
                 break;
 
             case ARCHERY:
-                switch (notificationTier) {
-                    case 1:
-                    case 2:
-                    case 3:
-                        mat = Material.ARROW;
-                        break;
-
-                    case 4:
-                    case 5:
-                        mat = Material.BOW;
-                        break;
-
-                    default:
-                        break;
-                }
-
-                break;
-
-            case UNARMED:
-                switch (notificationTier) {
-                    case 1:
-                        mat = Material.LEATHER_HELMET;
-                        break;
-
-                    case 2:
-                        mat = Material.CHAINMAIL_HELMET;
-                        break;
-
-                    case 3:
-                        mat = Material.IRON_HELMET;
-                        break;
-
-                    case 4:
-                        mat = Material.GOLD_HELMET;
-                        break;
-
-                    case 5:
-                        mat = Material.DIAMOND_HELMET;
-                        break;
-
-                    default:
-                        break;
-                }
-
-                break;
-
-            case EXCAVATION:
-                switch (notificationTier) {
-                    case 1:
-                        mat = Material.WOOD_SPADE;
-                        break;
-
-                    case 2:
-                        mat = Material.STONE_SPADE;
-                        break;
-
-                    case 3:
-                        mat = Material.IRON_SPADE;
-                        break;
-
-                    case 4:
-                        mat = Material.GOLD_SPADE;
-                        break;
-
-                    case 5:
-                        mat = Material.DIAMOND_SPADE;
-                        break;
-
-                    default:
-                        break;
-                }
-
+                notificationItem = getArcheryNotificationItem(skillLevel);
                 break;
 
             case AXES:
-                switch (notificationTier) {
-                    case 1:
-                        mat = Material.WOOD_AXE;
-                        break;
+                notificationItem = getAxesNotificationItem(skillLevel);
+                break;
 
-                    case 2:
-                        mat = Material.STONE_AXE;
-                        break;
-
-                    case 3:
-                        mat = Material.IRON_AXE;
-                        break;
-
-                    case 4:
-                        mat = Material.GOLD_AXE;
-                        break;
-
-                    case 5:
-                        mat = Material.DIAMOND_AXE;
-                        break;
-
-                    default:
-                        break;
-                }
-
+            case EXCAVATION:
+                notificationItem = getExcavationNotificationItem(skillLevel);
                 break;
 
             case FISHING:
-                switch (notificationTier) {
-                    case 1:
-                    case 2:
-                        mat = Material.RAW_FISH;
-                        break;
+                notificationItem = getFishingNotificationItem(skillLevel);
+                break;
 
-                    case 3:
-                    case 4:
-                        mat = Material.COOKED_FISH;
-                        break;
+            case HERBALISM:
+                notificationItem = getHerbalismNotificationItem(skillLevel);
+                break;
 
-                    case 5:
-                        mat = Material.FISHING_ROD;
-                        break;
+            case MINING:
+                notificationItem = getMiningNotificationItem(skillLevel);
+                break;
 
-                    default:
-                        break;
-                }
+            case REPAIR:
+                notificationItem = Material.ANVIL;
+                break;
 
+            case SWORDS:
+                notificationItem = getSwordsNotificationItem(skillLevel);
+                break;
+
+            case TAMING:
+                notificationItem = getTamingNotificationItem(skillLevel);
+                break;
+
+            case UNARMED:
+                notificationItem = getUnarmedNotificationItem(skillLevel);
+                break;
+
+            case WOODCUTTING:
+                notificationItem = getWoodcuttingNotificationItem(skillLevel);
                 break;
 
             default:
-                mat = Material.WATCH;
+                notificationItem = Material.MAP;
                 break;
         }
 
-        spoutPlayer.sendNotification(LocaleLoader.getString("Spout.LevelUp.1"), LocaleLoader.getString("Spout.LevelUp.2", SkillUtils.getSkillName(skillType), profile.getSkillLevel(skillType)), mat);
-        SpoutSoundUtils.playLevelUpNoise(spoutPlayer, plugin);
+        spoutPlayer.sendNotification(LocaleLoader.getString("Spout.LevelUp.1"), LocaleLoader.getString("Spout.LevelUp.2", SkillUtils.getSkillName(skillType), skillLevel), notificationItem);
+        SpoutManager.getSoundManager().playCustomSoundEffect(mcMMO.p, spoutPlayer, "level.wav", false);
     }
 
-    /**
-     * Gets the notification tier of a skill.
-     *
-     * @param level The level of the skill
-     * @return the notification tier of the skill
-     */
-    private static int getNotificationTier(int level) {
-        if (level >= AdvancedConfig.getInstance().getSpoutNotificationTier4()) {
-            return 5;
+    private static Material getAcrobaticsNotificationItem(int skillLevel) {
+        for (Tier tier : Tier.values()) {
+            if (skillLevel >= tier.getLevel()) {
+                return tier.getAcrobaticsNotificationItem();
+            }
         }
-        else if (level >= AdvancedConfig.getInstance().getSpoutNotificationTier3()) {
-            return 4;
+
+        return Material.LEATHER_BOOTS;
+    }
+
+    private static Material getArcheryNotificationItem(int skillLevel) {
+        for (Tier tier : Tier.values()) {
+            if (skillLevel >= tier.getLevel()) {
+                return tier.getArcheryNotificationItem();
+            }
         }
-        else if (level >= AdvancedConfig.getInstance().getSpoutNotificationTier2()) {
-            return 3;
+
+        return Material.FEATHER;
+    }
+
+    private static Material getAxesNotificationItem(int skillLevel) {
+        for (Tier tier : Tier.values()) {
+            if (skillLevel >= tier.getLevel()) {
+                return tier.getAxesNotificationItem();
+            }
         }
-        else if (level >= AdvancedConfig.getInstance().getSpoutNotificationTier1()) {
-            return 2;
+
+        return Material.WOOD_AXE;
+    }
+
+    private static Material getExcavationNotificationItem(int skillLevel) {
+        for (Tier tier : Tier.values()) {
+            if (skillLevel >= tier.getLevel()) {
+                return tier.getExcavationNotificationItem();
+            }
         }
-        else {
-            return 1;
+
+        return Material.DIRT;
+    }
+
+    private static Material getFishingNotificationItem(int skillLevel) {
+        for (Tier tier : Tier.values()) {
+            if (skillLevel >= tier.getLevel()) {
+                return tier.getFishingNotificationItem();
+            }
         }
+
+        return Material.RAW_FISH;
+    }
+
+    private static Material getHerbalismNotificationItem(int skillLevel) {
+        for (Tier tier : Tier.values()) {
+            if (skillLevel >= tier.getLevel()) {
+                return tier.getHerbalismNotificationItem();
+            }
+        }
+
+        return Material.VINE;
+    }
+
+    private static Material getMiningNotificationItem(int skillLevel) {
+        for (Tier tier : Tier.values()) {
+            if (skillLevel >= tier.getLevel()) {
+                return tier.getMiningNotificationItem();
+            }
+        }
+
+        return Material.COAL_ORE;
+    }
+
+    private static Material getSwordsNotificationItem(int skillLevel) {
+        for (Tier tier : Tier.values()) {
+            if (skillLevel >= tier.getLevel()) {
+                return tier.getSwordsNotificationItem();
+            }
+        }
+
+        return Material.WOOD_SWORD;
+    }
+
+    private static Material getTamingNotificationItem(int skillLevel) {
+        for (Tier tier : Tier.values()) {
+            if (skillLevel >= tier.getLevel()) {
+                return tier.getTamingNotificationItem();
+            }
+        }
+
+        return Material.PORK;
+    }
+
+    private static Material getUnarmedNotificationItem(int skillLevel) {
+        for (Tier tier : Tier.values()) {
+            if (skillLevel >= tier.getLevel()) {
+                return tier.getUnarmedNotificationItem();
+            }
+        }
+
+        return Material.LEATHER_HELMET;
+    }
+
+    private static Material getWoodcuttingNotificationItem(int skillLevel) {
+        for (Tier tier : Tier.values()) {
+            if (skillLevel >= tier.getLevel()) {
+                return tier.getWoodcuttingNotificationItem();
+            }
+        }
+
+        return Material.STICK;
     }
 
     /**
      * Re-enable SpoutCraft for players after a /reload
      */
     public static void reloadSpoutPlayers() {
+        PluginManager pluginManager = mcMMO.p.getServer().getPluginManager();
+
         for (SpoutPlayer spoutPlayer : SpoutManager.getPlayerChunkMap().getOnlinePlayers()) {
-            mcMMO.p.getServer().getPluginManager().callEvent(new SpoutCraftEnableEvent(spoutPlayer));
+            pluginManager.callEvent(new SpoutCraftEnableEvent(spoutPlayer));
         }
     }
 
@@ -578,9 +424,55 @@ public class SpoutUtils {
     }
 
     public static void preCacheFiles() {
-        extractFiles(); // Extract source materials
+        SpoutManager.getFileManager().addToPreLoginCache(mcMMO.p, extractFiles());
+    }
 
-        FileManager FM = SpoutManager.getFileManager();
-        FM.addToPreLoginCache(plugin, getFiles());
+    public static void processLevelup(McMMOPlayer mcMMOPlayer, SkillType skillType, int levelsGained) {
+        Player player = mcMMOPlayer.getPlayer();
+        SpoutPlayer spoutPlayer = SpoutManager.getPlayer(player);
+
+        if (spoutPlayer.isSpoutCraftEnabled()) {
+            levelUpNotification(skillType, spoutPlayer);
+
+            /* Update custom titles */
+            if (SpoutConfig.getInstance().getShowPowerLevel()) {
+                spoutPlayer.setTitle(LocaleLoader.getString("Spout.Title", spoutPlayer.getName(), mcMMOPlayer.getPowerLevel()));
+            }
+        }
+        else {
+            player.sendMessage(LocaleLoader.getString(StringUtils.getCapitalized(skillType.toString()) + ".Skillup", levelsGained, mcMMOPlayer.getProfile().getSkillLevel(skillType)));
+        }
+    }
+
+    public static void processXpGain(Player player, PlayerProfile profile) {
+        SpoutPlayer spoutPlayer = SpoutManager.getPlayer(player);
+
+        if (spoutPlayer.isSpoutCraftEnabled() && SpoutConfig.getInstance().getXPBarEnabled()) {
+            profile.getSpoutHud().updateXpBar();
+        }
+    }
+
+    public static void sendRepairNotifications(Player player, int anvilId) {
+        SpoutPlayer spoutPlayer = SpoutManager.getPlayer(player);
+
+        if (spoutPlayer.isSpoutCraftEnabled()) {
+            String[] spoutMessages = Repair.getSpoutAnvilMessages(anvilId);
+            spoutPlayer.sendNotification(spoutMessages[0], spoutMessages[1], Material.getMaterial(anvilId));
+        }
+        else {
+            player.sendMessage(Repair.getAnvilMessage(anvilId));
+        }
+    }
+
+    public static void sendDonationNotification(Player player) {
+        SpoutPlayer spoutPlayer = SpoutManager.getPlayer(player);
+
+        if (spoutPlayer.isSpoutCraftEnabled()) {
+            spoutPlayer.sendNotification(LocaleLoader.getString("Spout.Donate"), ChatColor.GREEN + "gjmcferrin@gmail.com", Material.DIAMOND);
+        }
+        else {
+            player.sendMessage(LocaleLoader.getString("MOTD.Donate"));
+            player.sendMessage(ChatColor.GOLD + " - " + ChatColor.GREEN + "gjmcferrin@gmail.com" + ChatColor.GOLD + " Paypal");
+        }
     }
 }

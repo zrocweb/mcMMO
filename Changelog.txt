@@ -7,19 +7,101 @@ Key:
   ! Change
   - Removal
 
-Version 1.4.04-dev
+Version 1.4.06-dev
+ + Added "Ice Fishing" ability to Fishing
+ + Added global scoreboards to track skill rankings (display using /mctop)
+ + Added per-player scoreboard displays for the /inspect, /mcrank, /mcstats, and /<skillname> commands
+ + Added tab-complete support for all commands
+ + Added ability to configure drops from Shake in treasures.yml
+ + Added "Master Angler" ability to Fishing.
+ + Added health display for mobs during combat.
+ + Added new API method to McMMOPlayerLevelUpEvent to set levels gained
+ + Added new permission node for /ptp; mcmmo.commands.ptp.send (enabled by default)
+ + Added configurable cooldown and warmup times when using /ptp
+ + Added a new Party item share category "Misc" which contains a list of configurable items. (By default all tools and armor)
+ + Added fishing exploit prevention
+ + Added permission node to bypass the fishing exploit prevention
+ + Added boosts to Fishing chance depending on conditions
+ + Added McMMOAbilityActivateEvent and McMMOAbilityDeactivateEvent
+ + Added config option to toggle the size of fireworks
+ + Added config option to multiply xp gains from mob spawner mobs
+ + Added multiplier to Archery XP based on bow force
+ + Added information about /party itemshare and /party expshare to the party help page
+ + Added option to use scoreboards for power level display instead of Spout.
+ = Fixed bug where custom Spout titles were overwritten by mcMMO.
+ = Fixed bug where Nether Quartz wasn't included in Smelting or item sharing
+ = Fixed bug where players were able to join the same party multiple times
+ = Fixed displaying partial names when trying to use /ptp
+ = Fixed wolves from Call of the Wild only having 8 health
+ = Fixed bug where /party chat was not working
+ = Fixed bug where experience commands were adding levels to all skills when they shouldn't
+ = Fixed mcmmo.commands.ptp.send not being set by default
+ = Fixed NPE when trying to tab-complete /mctop
+ = Fixed Fishing treasures always having the same enchants
+ = Fixed Smelting returning ink sacs instead of Lapis when double-dropping
+ = Fixed bug where players could remain in party chat after leaving or being kicked from a party.
+ = Fixed bug where non-player arrows couldn't be deflected.
+ = Fixed experience being applied even when the permission for a skill was denied
+ = Fixed possible item duplication bug with infinity bows
+ = Fixed bug with removing players from mySQL database
+ = Fixed bug with empty metadata lists and Smelting
+ = Fixed bug where Blast Mining would drop wrong items
+ ! Changed Spout notification tiers to be stored in SpoutConfig instead of AdvancedConfig
+ ! Changed Berserk to add items to inventory rather than denying pickup
+ ! Changed Call of the Wild, newly summoned pet's will have a custom name. (added permission node to disable this)
+ ! Changed Chimaera Wing's recipe result to use the ingredient Material
+ ! Changed Repair to ask a confirmation of the player when he tries to repair an enchanted item
+ ! Players will no longer pickup items to their hotbar while using Unarmed
+ ! ExperienceAPI methods will now throw InvalidSkillException if the skill name passed in is invalid.
+ ! Changed default value for recently-hurt cooldown between teleports, this is also fully configurable now
+ ! Changed the amount of info messages in the console when enabling/disabling, enable Verbose_Logging to enable them again
+ ! Items dropped by players are now being tracked and are not being shared with party members
+ ! Optimized tracking of tool & ability cooldowns.
+ ! Updated the localization files
+
+Version 1.4.05
+ + Added option to allow refreshing of chunks after block-breaking abilities. (Disabled by default)
+ + Added fireworks effects when a player levels-up, for every 100 levels (configurable)
+ = Fixed bug where /addxp was setting instead of adding experience
+ = Fixed bug where /addxp was not processessing level-ups for online players
+ = Fixed bug which allowed players to share experience with nearby dead players
+ = Fixed bug with ChimaeraWings not taking Wings from a players inventory properly
+ = Fixed bug which caused a NPE when trying to use /mctop smelting
+ = Fixed Berserk misbehaving when /reload was used
+ = Fixed parties misbehaving when /reload was used
+ = Fixed Berserk getting "stuck" when /mcrefresh was used
+ = Fixed ClassCastException with Taming
+ = Fixed huge mushroom blocks not being properly tracked
+ = Fixed potion buff option not using the appropriate # of ticks
+ = Fixed Chimera Wing spamming console if Metrics was disabled
+ = Fixed Chimera Wing displaying warmup message if warmup was set to 0
+ = Fixed party & admin chat errors when not aysnc
+ ! Updated localization files
+
+Version 1.4.04
  + Added functions to ExperienceAPI for use with offline players
  + Added Nether Quartz Ore to Mining
  + Added Dropper, Hopper, and Trapped Chest to blocks that shouldn't activate abilities
+ + Added partial name matching
  = Fixed bug where trying to activate a Chimaera Wing would require one item too much
  = Fixed bug where Treefeller would try to cut too many leaves and reach the threshold when it shouldn't
  = Fixed bug where Mining wasn't awarding double drops
  = Fixed bug where Shake wouldn't damage mobs whose max health was less than 4
  = Fixed bug where the API would fail if the name of a player's current party is requested when the player isn't in one (Thanks @dualspiral!)
  = Fixed bug with retrieving a player's party members
+ = Fixed bug which caused a NPE when trying to join the party of a non-existing player or when ptp to a non-existing player
+ = Fixed bug which causes a NPE when trying to use /mcrefresh from the console
+ = Fixed bug where Carrots and Potatoes weren't awarding Herbalism XP.
+ = Fixed bug where some herbalism drops weren't properly shared within parties.
+ = Fixed bug where players wouldn't be able to pick up items if they logged our while Berserk was still active.
+ ! Changed config node name for the skill experience modifiers from "Experience.Formula.Multiplier.[Skill]" to "Experience.Formula.Modifier.[Skill]"
  ! Updated localization files
+ ! mcMMO abilities can no longer be activated while in Creative mode
+ ! Expanded ChatAPI to allow toggling of chat states for users
+ ! Updated to EMetrics 0.0.4-SNAPSHOT
  - Removed deprecated functions from API classes.
  - Removed functions for getting the PlayerProfile - using API classes is preferred, but if not the McMMOPlayer should be used instead
+ - Removed Ender Dragon, Wither, and Witch from granting combat experience and related configuration options
 
 Version 1.4.03
  + Added option to advanced.yml to determine the # of enchant levels used when buffing Super Breaker & Giga Drill Breaker

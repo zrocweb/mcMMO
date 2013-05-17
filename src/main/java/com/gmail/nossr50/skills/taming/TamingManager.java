@@ -194,7 +194,13 @@ public class TamingManager extends SkillManager {
             ((Ocelot) entity).setCatType(Ocelot.Type.getType(1 + Misc.getRandom().nextInt(3)));
         }
         else {
+            entity.setMaxHealth(20);
             entity.setHealth(entity.getMaxHealth());
+        }
+
+        if (Permissions.renamePets(player)) {
+            entity.setCustomName(LocaleLoader.getString("Taming.Summon.Name.Format", player.getName(), StringUtils.getPrettyEntityTypeString(entity.getType())));
+            entity.setCustomNameVisible(true);
         }
 
         player.setItemInHand(new ItemStack(heldItem.getType(), heldItemAmount - summonAmount));

@@ -13,14 +13,11 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
-import org.getspout.spoutapi.SpoutManager;
-import org.getspout.spoutapi.player.SpoutPlayer;
 
 import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.config.Config;
 import com.gmail.nossr50.config.HiddenConfig;
-import com.gmail.nossr50.config.spout.SpoutConfig;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.AbilityType;
@@ -30,7 +27,10 @@ import com.gmail.nossr50.events.experience.McMMOPlayerLevelUpEvent;
 import com.gmail.nossr50.events.fake.FakeBlockBreakEvent;
 import com.gmail.nossr50.events.fake.FakeBlockDamageEvent;
 import com.gmail.nossr50.events.fake.FakePlayerAnimationEvent;
+import com.gmail.nossr50.events.skills.abilities.McMMOPlayerAbilityActivateEvent;
 import com.gmail.nossr50.locale.LocaleLoader;
+import com.gmail.nossr50.runnables.skills.AbilityDisableTask;
+import com.gmail.nossr50.runnables.skills.ToolLowerTask;
 import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.ModUtils;
@@ -40,8 +40,6 @@ import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.spout.SpoutUtils;
 
 public class SkillUtils {
-    private static int enchantBuff = AdvancedConfig.getInstance().getEnchantBuff();
-
     public static int handleFoodSkills(Player player, SkillType skill, int eventFoodLevel, int baseLevel, int maxLevel, int rankChange) {
         int skillLevel = UserManager.getPlayer(player).getProfile().getSkillLevel(skill);
 
@@ -85,21 +83,6 @@ public class SkillUtils {
      */
     public static int calculateTimeLeft(long deactivatedTimeStamp, int cooldown, Player player) {
         return (int) (((deactivatedTimeStamp + (PerksUtils.handleCooldownPerks(player, cooldown) * Misc.TIME_CONVERSION_FACTOR)) - System.currentTimeMillis()) / Misc.TIME_CONVERSION_FACTOR);
-    }
-
-    /**
-     * Sends a message to the player when the cooldown expires.
-     *
-     * @param mcMMOPlayer The player to send a message to
-     * @param ability The ability to watch cooldowns for
-     */
-    public static void watchCooldown(McMMOPlayer mcMMOPlayer, AbilityType ability) {
-        Player player = mcMMOPlayer.getPlayer();
-
-        if (!mcMMOPlayer.getAbilityInformed(ability) && cooldownOver(mcMMOPlayer.getProfile().getSkillDATS(ability) * Misc.TIME_CONVERSION_FACTOR, ability.getCooldown(), player)) {
-            mcMMOPlayer.setAbilityInformed(ability, true);
-            player.sendMessage(ability.getAbilityRefresh());
-        }
     }
 
     /**
@@ -152,52 +135,7 @@ public class SkillUtils {
 
             mcMMOPlayer.setToolPreparationATS(tool, System.currentTimeMillis());
             mcMMOPlayer.setToolPreparationMode(tool, true);
-        }
-    }
-
-    /**
-     * Monitors various things relating to skill abilities.
-     *
-     * @param mcMMOPlayer The player using the skill
-     * @param profile The profile of the player
-     * @param curTime The current system time
-     * @param skill The skill being monitored
-     */
-    public static void monitorSkill(McMMOPlayer mcMMOPlayer, long curTime, SkillType skill) {
-        final int FOUR_SECONDS = 4000;
-        ToolType tool = skill.getTool();
-
-        if (mcMMOPlayer.getToolPreparationMode(tool) && curTime - (mcMMOPlayer.getToolPreparationATS(tool) * Misc.TIME_CONVERSION_FACTOR) >= FOUR_SECONDS) {
-            mcMMOPlayer.setToolPreparationMode(tool, false);
-
-            if (Config.getInstance().getAbilityMessagesEnabled()) {
-                mcMMOPlayer.getPlayer().sendMessage(tool.getLowerTool());
-            }
-        }
-
-        AbilityType ability = skill.getAbility();
-        Player player = mcMMOPlayer.getPlayer();
-
-        if (ability.getPermissions(player)) {
-            if (mcMMOPlayer.getAbilityMode(ability) && (mcMMOPlayer.getProfile().getSkillDATS(ability) * Misc.TIME_CONVERSION_FACTOR) <= curTime) {
-                if (ability == AbilityType.BERSERK) {
-                    player.setCanPickupItems(true);
-                }
-                else if (ability == AbilityType.SUPER_BREAKER || ability == AbilityType.GIGA_DRILL_BREAKER) {
-                    handleAbilitySpeedDecrease(player);
-                }
-
-                mcMMOPlayer.setAbilityMode(ability, false);
-                mcMMOPlayer.setAbilityInformed(ability, false);
-
-                ParticleEffectUtils.playAbilityDisabledEffect(player);
-
-                if (mcMMOPlayer.useChatNotifications()) {
-                    player.sendMessage(ability.getAbilityOff());
-                }
-
-                sendSkillMessage(player, ability.getAbilityPlayerOff(player));
-            }
+            new ToolLowerTask(mcMMOPlayer, tool).runTaskLaterAsynchronously(mcMMO.p, 4 * 20);
         }
     }
 
@@ -209,19 +147,19 @@ public class SkillUtils {
      * @param profile The profile of the player whose skill to check
      */
     public static void xpCheckSkill(SkillType skillType, Player player, PlayerProfile profile) {
-        int skillups = 0;
-        int xpRemoved = 0;
+        int levelsGained = 0;
+        float xpRemoved = 0;
 
-        if (profile.getSkillXpLevel(skillType) >= profile.getXpToLevel(skillType)) {
+        if (profile.getSkillXpLevelRaw(skillType) >= profile.getXpToLevel(skillType)) {
             McMMOPlayer mcMMOPlayer = UserManager.getPlayer(player);
 
-            while (profile.getSkillXpLevel(skillType) >= profile.getXpToLevel(skillType)) {
+            while (profile.getSkillXpLevelRaw(skillType) >= profile.getXpToLevel(skillType)) {
                 if ((skillType.getMaxLevel() >= profile.getSkillLevel(skillType) + 1) && (Config.getInstance().getPowerLevelCap() >= mcMMOPlayer.getPowerLevel() + 1)) {
                     int xp = profile.getXpToLevel(skillType);
                     xpRemoved += xp;
 
                     profile.removeXp(skillType, xp);
-                    skillups++;
+                    levelsGained++;
                     profile.skillUp(skillType, 1);
                 }
                 else {
@@ -229,46 +167,27 @@ public class SkillUtils {
                 }
             }
 
-            McMMOPlayerLevelUpEvent eventToFire = new McMMOPlayerLevelUpEvent(player, skillType, skillups);
+            McMMOPlayerLevelUpEvent eventToFire = new McMMOPlayerLevelUpEvent(player, skillType, levelsGained);
             mcMMO.p.getServer().getPluginManager().callEvent(eventToFire);
 
             if (eventToFire.isCancelled()) {
-                profile.modifySkill(skillType, profile.getSkillLevel(skillType) - skillups);
-                profile.setSkillXpLevel(skillType, profile.getSkillXpLevel(skillType) + xpRemoved);
+                profile.modifySkill(skillType, profile.getSkillLevel(skillType) - levelsGained);
+                profile.setSkillXpLevel(skillType, profile.getSkillXpLevelRaw(skillType) + xpRemoved);
                 return;
             }
 
             String capitalized = StringUtils.getCapitalized(skillType.toString());
 
-            /* Spout Stuff */
-            if (mcMMO.spoutEnabled) {
-                SpoutPlayer spoutPlayer = SpoutManager.getPlayer(player);
-
-                if (spoutPlayer != null && spoutPlayer.isSpoutCraftEnabled()) {
-                    SpoutUtils.levelUpNotification(skillType, spoutPlayer);
-
-                    /* Update custom titles */
-                    if (SpoutConfig.getInstance().getShowPowerLevel()) {
-                        spoutPlayer.setTitle(LocaleLoader.getString("Spout.Title", spoutPlayer.getName(), UserManager.getPlayer(player).getPowerLevel()));
-                    }
-                }
-                else {
-                    player.sendMessage(LocaleLoader.getString(capitalized + ".Skillup", skillups, profile.getSkillLevel(skillType)));
-                }
+            if (mcMMO.isSpoutEnabled()) {
+                SpoutUtils.processLevelup(mcMMOPlayer, skillType, levelsGained);
             }
             else {
-                player.sendMessage(LocaleLoader.getString(capitalized + ".Skillup", skillups, profile.getSkillLevel(skillType)));
+                player.sendMessage(LocaleLoader.getString(capitalized + ".Skillup", levelsGained, profile.getSkillLevel(skillType)));
             }
         }
 
-        if (mcMMO.spoutEnabled) {
-            SpoutPlayer spoutPlayer = SpoutManager.getPlayer(player);
-
-            if (spoutPlayer != null && spoutPlayer.isSpoutCraftEnabled()) {
-                if (SpoutConfig.getInstance().getXPBarEnabled()) {
-                    profile.getSpoutHud().updateXpBar();
-                }
-            }
+        if (mcMMO.isSpoutEnabled()) {
+            SpoutUtils.processXpGain(player, profile);
         }
     }
 
@@ -387,6 +306,13 @@ public class SkillUtils {
         }
 
         if (!mcMMOPlayer.getAbilityMode(ability) && cooldownOver(playerProfile.getSkillDATS(ability), ability.getCooldown(), player)) {
+            McMMOPlayerAbilityActivateEvent event = new McMMOPlayerAbilityActivateEvent(player, type);
+            mcMMO.p.getServer().getPluginManager().callEvent(event);
+
+            if (event.isCancelled()) {
+                return;
+            }
+
             int ticks = PerksUtils.handleActivationPerks(player, 2 + (playerProfile.getSkillLevel(type) / AdvancedConfig.getInstance().getAbilityLength()), ability.getMaxTicks());
 
             ParticleEffectUtils.playAbilityEnabledEffect(player);
@@ -400,12 +326,11 @@ public class SkillUtils {
             playerProfile.setSkillDATS(ability, System.currentTimeMillis() + (ticks * Misc.TIME_CONVERSION_FACTOR));
             mcMMOPlayer.setAbilityMode(ability, true);
 
-            if (ability == AbilityType.BERSERK) {
-                player.setCanPickupItems(false);
-            }
-            else if (ability == AbilityType.SUPER_BREAKER || ability == AbilityType.GIGA_DRILL_BREAKER) {
+            if (ability == AbilityType.SUPER_BREAKER || ability == AbilityType.GIGA_DRILL_BREAKER) {
                 handleAbilitySpeedIncrease(player);
             }
+
+            new AbilityDisableTask(mcMMOPlayer, ability).runTaskLater(mcMMO.p, ticks * 20);
         }
     }
 
@@ -476,7 +401,7 @@ public class SkillUtils {
             }
 
             itemLore.add("mcMMO Ability Tool");
-            itemMeta.addEnchant(Enchantment.DIG_SPEED, efficiencyLevel + enchantBuff, true);
+            itemMeta.addEnchant(Enchantment.DIG_SPEED, efficiencyLevel + AdvancedConfig.getInstance().getEnchantBuff(), true);
 
             itemMeta.setLore(itemLore);
             heldItem.setItemMeta(itemMeta);
@@ -499,10 +424,10 @@ public class SkillUtils {
             int ticks = 0;
 
             if (mcMMOPlayer.getAbilityMode(AbilityType.SUPER_BREAKER)) {
-                ticks = ((int) (mcMMOPlayer.getProfile().getSkillDATS(AbilityType.SUPER_BREAKER) - System.currentTimeMillis())) / Misc.TIME_CONVERSION_FACTOR;
+                ticks = ((int) (mcMMOPlayer.getProfile().getSkillDATS(AbilityType.SUPER_BREAKER) - (System.currentTimeMillis() / Misc.TIME_CONVERSION_FACTOR))) * 20;
             }
             else if (mcMMOPlayer.getAbilityMode(AbilityType.GIGA_DRILL_BREAKER)) {
-                ticks = ((int) (mcMMOPlayer.getProfile().getSkillDATS(AbilityType.GIGA_DRILL_BREAKER) - System.currentTimeMillis())) / Misc.TIME_CONVERSION_FACTOR;
+                ticks = ((int) (mcMMOPlayer.getProfile().getSkillDATS(AbilityType.GIGA_DRILL_BREAKER) - (System.currentTimeMillis() / Misc.TIME_CONVERSION_FACTOR))) * 20;
             }
 
             PotionEffect abilityBuff = new PotionEffect(PotionEffectType.FAST_DIGGING, duration + ticks, amplifier + 10);
@@ -542,11 +467,11 @@ public class SkillUtils {
                 if (itemLore.remove("mcMMO Ability Tool")) {
                     int efficiencyLevel = item.getEnchantmentLevel(Enchantment.DIG_SPEED);
 
-                    if (efficiencyLevel <= enchantBuff) {
+                    if (efficiencyLevel <= AdvancedConfig.getInstance().getEnchantBuff()) {
                         itemMeta.removeEnchant(Enchantment.DIG_SPEED);
                     }
                     else {
-                        itemMeta.addEnchant(Enchantment.DIG_SPEED, efficiencyLevel - enchantBuff, true);
+                        itemMeta.addEnchant(Enchantment.DIG_SPEED, efficiencyLevel - AdvancedConfig.getInstance().getEnchantBuff(), true);
                     }
 
                     itemMeta.setLore(itemLore);

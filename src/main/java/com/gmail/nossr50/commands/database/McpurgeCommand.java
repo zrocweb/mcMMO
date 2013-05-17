@@ -1,38 +1,26 @@
 package com.gmail.nossr50.commands.database;
 
+import java.util.List;
+
 import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabExecutor;
 
+import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.config.Config;
-import com.gmail.nossr50.database.DatabaseManager;
-import com.gmail.nossr50.database.LeaderboardManager;
 import com.gmail.nossr50.locale.LocaleLoader;
-import com.gmail.nossr50.util.Permissions;
 
-public class McpurgeCommand implements CommandExecutor {
+import com.google.common.collect.ImmutableList;
+
+public class McpurgeCommand implements TabExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!Permissions.mcpurge(sender)) {
-            sender.sendMessage(command.getPermissionMessage());
-            return true;
-        }
-
         switch (args.length) {
             case 0:
-                if (Config.getInstance().getUseMySQL()) {
-                    DatabaseManager.purgePowerlessSQL();
+                mcMMO.getDatabaseManager().purgePowerlessUsers();
 
-                    if (Config.getInstance().getOldUsersCutoff() != -1) {
-                        DatabaseManager.purgeOldSQL();
-                    }
-                }
-                else {
-                    LeaderboardManager.purgePowerlessFlatfile();
-
-                    if (Config.getInstance().getOldUsersCutoff() != -1) {
-                        LeaderboardManager.purgeOldFlatfile();
-                    }
+                if (Config.getInstance().getOldUsersCutoff() != -1) {
+                    mcMMO.getDatabaseManager().purgeOldUsers();
                 }
 
                 sender.sendMessage(LocaleLoader.getString("Commands.mcpurge.Success"));
@@ -41,5 +29,10 @@ public class McpurgeCommand implements CommandExecutor {
             default:
                 return false;
         }
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        return ImmutableList.of();
     }
 }

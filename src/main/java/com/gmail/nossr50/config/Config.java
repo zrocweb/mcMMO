@@ -6,6 +6,7 @@ import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.EntityType;
 
+import com.gmail.nossr50.datatypes.MobHealthbarType;
 import com.gmail.nossr50.datatypes.skills.AbilityType;
 import com.gmail.nossr50.datatypes.skills.SkillType;
 import com.gmail.nossr50.util.StringUtils;
@@ -45,8 +46,41 @@ public class Config extends AutoUpdateConfigLoader {
     public boolean getVerboseLoggingEnabled() { return config.getBoolean("General.Verbose_Logging", false); }
     public boolean getConfigOverwriteEnabled() { return config.getBoolean("General.Config_Update_Overwrite", true); }
 
+    public boolean getPotatoEnabled() { return config.getBoolean("General.Potato_Explosion_Enabled", false); }
+    public int getPotatoChance() { return config.getInt("General.Potato_Explosion_Chance", 1); }
+
     public boolean getPartyDisplayNames() { return config.getBoolean("Commands.p.Use_Display_Names", true); }
     public boolean getAdminDisplayNames() { return config.getBoolean("Commands.a.Use_Display_Names", true); }
+
+    /* Mob Healthbar */
+    public MobHealthbarType getMobHealthbarDefault() {
+        try {
+            return MobHealthbarType.valueOf(config.getString("Mob_Healthbar.Display_Type", "HEARTS").toUpperCase().trim());
+        }
+        catch (IllegalArgumentException ex) {
+            return MobHealthbarType.HEARTS;
+        }
+    }
+
+    public int getMobHealthbarTime() { return config.getInt("Mob_Healthbar.Display_Time", 3); }
+
+    /* Scoreboards */
+    public boolean getMcrankScoreboardEnabled() { return config.getBoolean("Scoreboards.Mcrank.Use", true); }
+    public int getMcrankScoreboardTime() { return config.getInt("Scoreboards.Mcrank.Display_Time", 10); }
+
+    public boolean getMcstatsScoreboardsEnabled() { return config.getBoolean("Scoreboards.Mcstats.Use", true); }
+    public int getMcstatsScoreboardTime() { return config.getInt("Scoreboards.Mcstats.Display_Time", 10); }
+
+    public boolean getMctopScoreboardEnabled() { return config.getBoolean("Scoreboards.Mctop.Use", true); }
+    public int getMctopScoreboardTime() { return config.getInt("Scoreboards.Mctop.Display_Time", 10); }
+
+    public boolean getInspectScoreboardEnabled() { return config.getBoolean("Scoreboards.Inspect.Use", true); }
+    public int getInspectScoreboardTime() { return config.getInt("Scoreboards.Inspect.Display_Time", 10); }
+
+    public boolean getSkillScoreboardEnabled() { return config.getBoolean("Scoreboards.Skillname.Use", true); }
+    public int getSkillScoreboardTime() { return config.getInt("Scoreboards.Skillname.Display_Time", 10); }
+
+    public boolean getPowerLevelsEnabled() { return config.getBoolean("Scoreboards.Power_Level.Use", true); }
 
     /* Database Purging */
     public int getPurgeInterval() { return config.getInt("Database_Purging.Purge_Interval", -1); }
@@ -107,6 +141,8 @@ public class Config extends AutoUpdateConfigLoader {
     public boolean getChimaeraEnabled() { return config.getBoolean("Items.Chimaera_Wing.Enabled", true); }
     public boolean getChimaeraPreventUseUnderground() { return config.getBoolean("Items.Chimaera_Wing.Prevent_Use_Underground", true); }
     public int getChimaeraCooldown() { return config.getInt("Items.Chimaera_Wing.Cooldown", 240); }
+    public int getChimaeraWarmup() { return config.getInt("Items.Chimaera_Wing.Warmup", 5); }
+    public int getChimaeraRecentlyHurtCooldown() { return config.getInt("Items.Chimaera_Wing.RecentlyHurt_Cooldown", 60); }
 
     /* Particles */
     public boolean getAbilityActivationEffectEnabled() { return config.getBoolean("Particles.Ability_Activation", true); }
@@ -114,6 +150,9 @@ public class Config extends AutoUpdateConfigLoader {
     public boolean getDodgeEffectEnabled() { return config.getBoolean("Particles.Dodge", true); }
     public boolean getBleedEffectEnabled() { return config.getBoolean("Particles.Bleed", true); }
     public boolean getGreaterImpactEffectEnabled() { return config.getBoolean("Particles.Greater_Impact", true); }
+    public boolean getLevelUpEffectsEnabled() { return config.getBoolean("Particles.LevelUp_Enabled", true); }
+    public int getLevelUpEffectsTier() { return config.getInt("Particles.LevelUp_Tier", 100); }
+    public boolean getLargeFireworks() { return config.getBoolean("Particles.LargeFireworks", true); }
 
     /* PARTY SETTINGS */
     public int getAutoPartyKickInterval() { return config.getInt("Party.AutoKick_Interval", 12); }
@@ -126,10 +165,15 @@ public class Config extends AutoUpdateConfigLoader {
     public double getPartyShareRange() { return config.getDouble("Party.Sharing.Range", 75.0); }
 
     /* Party Teleport Settings */
-    public int getPTPCommandCooldown() { return config.getInt("Commands.ptp.Cooldown", 30); }
+    public int getPTPCommandCooldown() { return config.getInt("Commands.ptp.Cooldown", 120); }
+    public int getPTPCommandWarmup() { return config.getInt("Commands.ptp.Warmup", 5); }
+    public int getPTPCommandRecentlyHurtCooldown() { return config.getInt("Commands.ptp.RecentlyHurt_Cooldown", 60); }
     public int getPTPCommandTimeout() { return config.getInt("Commands.ptp.Request_Timeout", 300); }
     public boolean getPTPCommandConfirmRequired() { return config.getBoolean("Commands.ptp.Confirm_Required", true); }
     public boolean getPTPCommandWorldPermissions() { return config.getBoolean("Commands.ptp.World_Based_Permissions", false); }
+
+    /* Inspect command distance */
+    public double getInspectDistance() { return config.getDouble("Commands.inspect.Max_Distance", 30); }
 
     /*
      * ABILITY SETTINGS
@@ -189,6 +233,7 @@ public class Config extends AutoUpdateConfigLoader {
     public int getSalvageAnvilId() { return config.getInt("Skills.Repair.Salvage_Anvil_ID", 41); }
     public boolean getSalvageTools() { return config.getBoolean("Skills.Repair.Salvage_tools", true); }
     public boolean getSalvageArmor() { return config.getBoolean("Skills.Repair.Salvage_armor", true); }
+    public boolean getRepairConfirmRequired() { return config.getBoolean("Skills.Repair.Confirm_Required", true); }
 
     /* Unarmed */
     public boolean getUnarmedBlockCrackerSmoothbrickToCracked() { return config.getBoolean("Skills.Unarmed.Block_Cracker.SmoothBrick_To_CrackedBrick", true); }
@@ -236,7 +281,6 @@ public class Config extends AutoUpdateConfigLoader {
      */
 
     /* General Settings */
-    public boolean getExperienceGainsMobspawnersEnabled() { return config.getBoolean("Experience.Gains.Mobspawners.Enabled", false); }
     public boolean getExperienceGainsPlayerVersusPlayerEnabled() { return config.getBoolean("Experience.PVP.Rewards", true); }
 
     public double getExperienceGainsGlobalMultiplier() { return config.getDouble("Experience.Gains.Multiplier.Global", 1.0); }
@@ -249,8 +293,9 @@ public class Config extends AutoUpdateConfigLoader {
     public double getAnimalsXP() { return config.getDouble("Experience.Combat.Multiplier.Animals", 1.0); }
     public double getWitherSkeletonXP() { return config.getDouble("Experience.Combat.Multiplier.Wither_Skeleton", 4.0); }
 
+    public double getSpawnedMobXpMultiplier() { return config.getDouble("Experience.Gains.MobSpawners.Multiplier", 0.0); }
 
     /* XP Formula Multiplier */
     public int getFormulaMultiplierCurve() { return config.getInt("Experience.Formula.Curve_Modifier", 20); }
-    public double getForumulaMultiplier(SkillType skill) { return config.getDouble("Experience.Formula.Multiplier." + StringUtils.getCapitalized(skill.toString())); }
+    public double getForumulaMultiplier(SkillType skill) { return config.getDouble("Experience.Formula.Modifier." + StringUtils.getCapitalized(skill.toString())); }
 }
