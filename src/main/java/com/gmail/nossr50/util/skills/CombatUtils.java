@@ -38,6 +38,7 @@ import com.gmail.nossr50.skills.taming.TamingManager;
 import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.Misc;
+import com.gmail.nossr50.util.MobHealthbarUtils;
 import com.gmail.nossr50.util.ModUtils;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.player.UserManager;
@@ -244,12 +245,13 @@ public final class CombatUtils {
                         event.setDamage(archeryManager.dazeCheck((Player) target, event.getDamage()));
                     }
 
-                    if (archeryManager.canTrackArrows()) {
+                    if (!damager.hasMetadata(mcMMO.infiniteArrowKey) && archeryManager.canTrackArrows()) {
                         archeryManager.trackArrows(target);
                     }
 
-                    archeryManager.distanceXpBonus(target);
-                    startGainXp(mcMMOPlayer, target, SkillType.ARCHERY);
+                    archeryManager.distanceXpBonus(target, damager);
+
+                    startGainXp(mcMMOPlayer, target, SkillType.ARCHERY, damager.getMetadata(mcMMO.bowForceKey).get(0).asDouble());
                 }
 
                 break;
@@ -283,6 +285,33 @@ public final class CombatUtils {
                     swordsManager.counterAttackChecks((LivingEntity) damager, event.getDamage());
                 }
             }
+
+            if (damager.getType() == EntityType.ARROW) {
+                LivingEntity shooter = ((Arrow) damager).getShooter();
+
+                if (shooter instanceof Player || !SkillType.UNARMED.getPVEEnabled()) {
+                    return;
+                }
+
+                UnarmedManager unarmedManager = mcMMOPlayer.getUnarmedManager();
+
+                if (unarmedManager.canDeflect()) {
+                    event.setCancelled(unarmedManager.deflectCheck());
+
+                    if (event.isCancelled()) {
+                        return;
+                    }
+                }
+            }
+        }
+        else if (attacker instanceof Player) {
+            Player player = (Player) attacker;
+
+            if (Misc.isNPCEntity(player)) {
+                return;
+            }
+
+            MobHealthbarUtils.handleMobHealthbars(player, target, event.getDamage());
         }
     }
 
@@ -396,6 +425,10 @@ public final class CombatUtils {
         }
     }
 
+    public static void startGainXp(McMMOPlayer mcMMOPlayer, LivingEntity target, SkillType skillType) {
+        startGainXp(mcMMOPlayer, target, skillType, 1.0);
+    }
+
     /**
      * Start the task that gives combat XP.
      *
@@ -403,7 +436,7 @@ public final class CombatUtils {
      * @param target The defending entity
      * @param skillType The skill being used
      */
-    public static void startGainXp(McMMOPlayer mcMMOPlayer, LivingEntity target, SkillType skillType) {
+    public static void startGainXp(McMMOPlayer mcMMOPlayer, LivingEntity target, SkillType skillType, double multiplier) {
         double baseXP = 0;
 
         if (target instanceof Player) {
@@ -413,11 +446,11 @@ public final class CombatUtils {
 
             Player defender = (Player) target;
 
-            if (System.currentTimeMillis() >= UserManager.getPlayer(defender).getRespawnATS() + 5) {
+            if (defender.isOnline() && System.currentTimeMillis() >= UserManager.getPlayer(defender).getRespawnATS() + 5) {
                 baseXP = 20 * Config.getInstance().getPlayerVersusPlayerXP();
             }
         }
-        else if (!target.hasMetadata(mcMMO.entityMetadataKey)) {
+        else {
             if (target instanceof Animals) {
                 if (ModUtils.isCustomEntity(target)) {
                     baseXP = ModUtils.getCustomEntity(target).getXpMultiplier();
@@ -437,7 +470,6 @@ public final class CombatUtils {
                     case BLAZE:
                     case CAVE_SPIDER:
                     case CREEPER:
-                    case ENDER_DRAGON:
                     case ENDERMAN:
                     case GHAST:
                     case GIANT:
@@ -446,8 +478,6 @@ public final class CombatUtils {
                     case SILVERFISH:
                     case SLIME:
                     case SPIDER:
-                    case WITCH:
-                    case WITHER:
                     case ZOMBIE:
                         baseXP = Config.getInstance().getCombatXP(type);
                         break;
@@ -480,10 +510,16 @@ public final class CombatUtils {
                         }
                         break;
                 }
+
+                if (target.hasMetadata(mcMMO.entityMetadataKey)) {
+                    baseXP *= Config.getInstance().getSpawnedMobXpMultiplier();
+                }
             }
 
             baseXP *= 10;
         }
+
+        baseXP *= multiplier;
 
         if (baseXP != 0) {
             new AwardCombatXpTask(mcMMOPlayer, skillType, baseXP, target).runTaskLater(mcMMO.p, 0);

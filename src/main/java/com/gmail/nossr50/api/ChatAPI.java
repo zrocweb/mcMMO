@@ -73,7 +73,7 @@ public final class ChatAPI {
      * @return true if the player is using party chat, false otherwise
      */
     public static boolean isUsingPartyChat(Player player) {
-        return UserManager.getPlayer(player).getPartyChatMode();
+        return isUsingPartyChat(player.getName());
     }
 
     /**
@@ -93,7 +93,7 @@ public final class ChatAPI {
      * @return true if the player is using admin chat, false otherwise
      */
     public static boolean isUsingAdminChat(Player player) {
-        return UserManager.getPlayer(player).getAdminChatMode();
+        return isUsingAdminChat(player.getName());
     }
 
     /**
@@ -104,5 +104,41 @@ public final class ChatAPI {
      */
     public static boolean isUsingAdminChat(String playerName) {
         return UserManager.getPlayer(playerName).getAdminChatMode();
+    }
+
+    /**
+     * Toggle the party chat mode of a player.
+     *
+     * @param player The player to toggle party chat on.
+     */
+    public static void togglePartyChat(Player player) {
+        togglePartyChat(player.getName());
+    }
+
+    /**
+     * Toggle the party chat mode of a player.
+     *
+     * @param playerName The name of the player to toggle party chat on.
+     */
+    public static void togglePartyChat(String playerName) {
+        UserManager.getPlayer(playerName).setPartyChat(!isUsingPartyChat(playerName));
+    }
+
+    /**
+     * Toggle the admin chat mode of a player.
+     *
+     * @param player The player to toggle admin chat on.
+     */
+    public static void toggleAdminChat(Player player) {
+        toggleAdminChat(player.getName());
+    }
+
+    /**
+     * Toggle the admin chat mode of a player.
+     *
+     * @param playerName The name of the player to toggle party chat on.
+     */
+    public static void toggleAdminChat(String playerName){
+        UserManager.getPlayer(playerName).setAdminChat(!isUsingAdminChat(playerName));
     }
 }

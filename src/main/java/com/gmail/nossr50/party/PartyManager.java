@@ -2,10 +2,10 @@ package com.gmail.nossr50.party;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 import org.bukkit.OfflinePlayer;
-import org.bukkit.Server;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
@@ -19,8 +19,9 @@ import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.player.UserManager;
 
 public final class PartyManager {
-    private static String partiesFilePath = mcMMO.p.getDataFolder().getPath() + File.separator + "FlatFileStuff" + File.separator + "parties.yml";
+    private static String partiesFilePath = mcMMO.getFlatFileDirectory() + "parties.yml";
     private static List<Party> parties = new ArrayList<Party>();
+    private static File partyFile = new File(partiesFilePath);
 
     private PartyManager() {}
 
@@ -84,7 +85,7 @@ public final class PartyManager {
         List<Player> nearMembers = new ArrayList<Player>();
         if (party != null) {
             for (Player member : party.getOnlineMembers()) {
-                if (!player.getName().equalsIgnoreCase(member.getName()) && Misc.isNear(player.getLocation(), member.getLocation(), range)) {
+                if (!player.getName().equalsIgnoreCase(member.getName()) && !member.isDead() && Misc.isNear(player.getLocation(), member.getLocation(), range)) {
                     nearMembers.add(member);
                 }
             }
@@ -98,7 +99,7 @@ public final class PartyManager {
      * @param player The player to check
      * @return all the players in the player's party
      */
-    public static List<OfflinePlayer> getAllMembers(Player player) {
+    public static LinkedHashSet<String> getAllMembers(Player player) {
         Party party = UserManager.getPlayer(player).getParty();
 
         if (party == null) {
@@ -164,8 +165,8 @@ public final class PartyManager {
      */
     public static Party getPlayerParty(String playerName) {
         for (Party party : parties) {
-            for (OfflinePlayer member : party.getMembers()) {
-                if (member.getName().equalsIgnoreCase(playerName)) {
+            for (String memberName : party.getMembers()) {
+                if (memberName.equalsIgnoreCase(playerName)) {
                     return party;
                 }
             }
@@ -190,9 +191,9 @@ public final class PartyManager {
      * @param party The party
      */
     public static void removeFromParty(OfflinePlayer player, Party party) {
-        List<OfflinePlayer> members = party.getMembers();
+        LinkedHashSet<String> members = party.getMembers();
 
-        members.remove(player);
+        members.remove(player.getName());
 
         if (members.isEmpty()) {
             parties.remove(party);
@@ -200,7 +201,7 @@ public final class PartyManager {
         else {
             // If the leaving player was the party leader, appoint a new leader from the party members
             if (party.getLeader().equalsIgnoreCase(player.getName())) {
-                String newLeader = members.get(0).getName();
+                String newLeader = members.iterator().next();
                 party.setLeader(newLeader);
             }
 
@@ -211,6 +212,7 @@ public final class PartyManager {
 
         if (mcMMOPlayer != null) {
             mcMMOPlayer.removeParty();
+            mcMMOPlayer.setPartyChat(false);
             mcMMOPlayer.setItemShareModifier(10);
         }
     }
@@ -221,13 +223,14 @@ public final class PartyManager {
      * @param party The party to remove
      */
     public static void disbandParty(Party party) {
-        List<OfflinePlayer> members = party.getMembers();
+        LinkedHashSet<String> members = party.getMembers();
 
-        for (OfflinePlayer member : members) {
-            McMMOPlayer mcMMOPlayer = UserManager.getPlayer(member.getName());
+        for (String memberName : members) {
+            McMMOPlayer mcMMOPlayer = UserManager.getPlayer(memberName);
 
             if (mcMMOPlayer != null) {
                 mcMMOPlayer.removeParty();
+                mcMMOPlayer.setPartyChat(false);
                 mcMMOPlayer.setItemShareModifier(10);
             }
         }
@@ -360,7 +363,8 @@ public final class PartyManager {
 
         informPartyMembersJoin(player, party);
         mcMMOPlayer.setParty(party);
-        party.getMembers().add(player);
+
+        party.getMembers().add(player.getName());
     }
 
     /**
@@ -438,20 +442,11 @@ public final class PartyManager {
      * Load party file.
      */
     public static void loadParties() {
-        File file = new File(partiesFilePath);
-
-        if (!file.exists()) {
+        if (!partyFile.exists()) {
             return;
         }
 
-        YamlConfiguration partiesFile = new YamlConfiguration();
-
-        try {
-            partiesFile.load(file);
-        }
-        catch (Exception e) {
-            e.printStackTrace();
-        }
+        YamlConfiguration partiesFile = YamlConfiguration.loadConfiguration(partyFile);
 
         for (String partyName : partiesFile.getConfigurationSection("").getKeys(false)) {
             Party party = new Party();
@@ -460,15 +455,14 @@ public final class PartyManager {
             party.setLeader(partiesFile.getString(partyName + ".Leader"));
             party.setPassword(partiesFile.getString(partyName + ".Password"));
             party.setLocked(partiesFile.getBoolean(partyName + ".Locked"));
-            party.setXpShareMode(ShareHandler.ShareMode.getFromString(partiesFile.getString(partyName + ".ExpShareMode")));
-            party.setItemShareMode(ShareHandler.ShareMode.getFromString(partiesFile.getString(partyName + ".ItemShareMode")));
+            party.setXpShareMode(ShareHandler.ShareMode.getShareMode(partiesFile.getString(partyName + ".ExpShareMode", "NONE")));
+            party.setItemShareMode(ShareHandler.ShareMode.getShareMode(partiesFile.getString(partyName + ".ItemShareMode", "NONE")));
 
             List<String> memberNames = partiesFile.getStringList(partyName + ".Members");
-            List<OfflinePlayer> members = party.getMembers();
-            Server server = mcMMO.p.getServer();
+            LinkedHashSet<String> members = party.getMembers();
 
             for (String memberName : memberNames) {
-                members.add(server.getOfflinePlayer(memberName));
+                members.add(memberName);
             }
 
             parties.add(party);
@@ -479,10 +473,8 @@ public final class PartyManager {
      * Save party file.
      */
     public static void saveParties() {
-        File file = new File(partiesFilePath);
-
-        if (file.exists()) {
-            file.delete();
+        if (partyFile.exists()) {
+            partyFile.delete();
         }
 
         YamlConfiguration partiesFile = new YamlConfiguration();
@@ -498,15 +490,17 @@ public final class PartyManager {
 
             List<String> memberNames = new ArrayList<String>();
 
-            for (OfflinePlayer member : party.getMembers()) {
-                memberNames.add(member.getName());
+            for (String member : party.getMembers()) {
+                if (!memberNames.contains(member)) {
+                    memberNames.add(member);
+                }
             }
 
             partiesFile.set(partyName + ".Members", memberNames);
         }
 
         try {
-            partiesFile.save(new File(partiesFilePath));
+            partiesFile.save(partyFile);
         }
         catch (Exception e) {
             e.printStackTrace();

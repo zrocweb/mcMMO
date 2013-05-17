@@ -1,16 +1,16 @@
 package com.gmail.nossr50.config.spout;
 
+import org.getspout.spoutapi.keyboard.Keyboard;
+
 import com.gmail.nossr50.config.ConfigLoader;
 import com.gmail.nossr50.datatypes.skills.SkillType;
 import com.gmail.nossr50.datatypes.spout.huds.HudType;
 
 public class SpoutConfig extends ConfigLoader {
     private static SpoutConfig instance;
-    public HudType defaultHudType;
 
     private SpoutConfig() {
         super("spout.yml");
-        loadKeys();
     }
 
     public static SpoutConfig getInstance() {
@@ -24,22 +24,26 @@ public class SpoutConfig extends ConfigLoader {
     @Override
     protected void loadKeys() {
         // Setup default HUD
-        String temp = config.getString("Spout.HUD.Default", "STANDARD");
+    }
 
-        for (HudType hudType : HudType.values()) {
-            if (hudType.toString().equalsIgnoreCase(temp)) {
-                defaultHudType = hudType;
-                break;
-            }
+    public HudType getDefaultHudType() {
+        try {
+            return HudType.valueOf(config.getString("Spout.HUD.Default", "STANDARD").toUpperCase().trim());
         }
-
-        if (defaultHudType == null) {
-            defaultHudType = HudType.STANDARD;
+        catch (IllegalArgumentException ex) {
+            return HudType.STANDARD;
         }
     }
 
     public boolean getShowPowerLevel() { return config.getBoolean("HUD.Show_Power_Level", true); }
-    public String getMenuKey() { return config.getString("Menu.Key", "KEY_M"); }
+    public Keyboard getMenuKey() { 
+        try {
+            return Keyboard.valueOf(config.getString("Menu.Key", "KEY_M").toUpperCase().trim());
+        }
+        catch (IllegalArgumentException ex) {
+            return Keyboard.KEY_M;
+        }
+    }
 
     /* XP Bar */
     public boolean getXPBarEnabled() { return config.getBoolean("XP.Bar.Enabled", true); }
@@ -62,4 +66,10 @@ public class SpoutConfig extends ConfigLoader {
     public double getRetroHUDRed(SkillType skill) { return config.getDouble("HUD.Retro.Colors." + skill.toString().toLowerCase() +".RED", 0.3); }
     public double getRetroHUDGreen(SkillType skill) { return config.getDouble("HUD.Retro.Colors." + skill.toString().toLowerCase() +".RED", 0.3); }
     public double getRetroHUDBlue(SkillType skill) { return config.getDouble("HUD.Retro.Colors." + skill.toString().toLowerCase() +".RED", 0.3); }
+
+    /* Notification Tiers */
+    public int getNotificationTier1() { return config.getInt("Notifications.Tier1", 200); }
+    public int getNotificationTier2() { return config.getInt("Notifications.Tier2", 400); }
+    public int getNotificationTier3() { return config.getInt("Notifications.Tier3", 600); }
+    public int getNotificationTier4() { return config.getInt("Notifications.Tier4", 800); }
 }

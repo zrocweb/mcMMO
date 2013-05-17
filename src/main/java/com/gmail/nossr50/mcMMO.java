@@ -3,7 +3,6 @@ package com.gmail.nossr50;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
 import net.shatteredlands.shatt.backup.ZipLibrary;
@@ -24,11 +23,12 @@ import com.gmail.nossr50.config.mods.CustomToolConfig;
 import com.gmail.nossr50.config.spout.SpoutConfig;
 import com.gmail.nossr50.config.treasure.TreasureConfig;
 import com.gmail.nossr50.database.DatabaseManager;
-import com.gmail.nossr50.database.LeaderboardManager;
 import com.gmail.nossr50.listeners.BlockListener;
 import com.gmail.nossr50.listeners.EntityListener;
 import com.gmail.nossr50.listeners.InventoryListener;
 import com.gmail.nossr50.listeners.PlayerListener;
+import com.gmail.nossr50.listeners.SelfListener;
+import com.gmail.nossr50.listeners.SpoutListener;
 import com.gmail.nossr50.listeners.WorldListener;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.metrics.MetricsManager;
@@ -36,9 +36,7 @@ import com.gmail.nossr50.party.PartyManager;
 import com.gmail.nossr50.runnables.SaveTimerTask;
 import com.gmail.nossr50.runnables.database.UserPurgeTask;
 import com.gmail.nossr50.runnables.party.PartyAutoKickTask;
-import com.gmail.nossr50.runnables.party.PartyLoaderTask;
 import com.gmail.nossr50.runnables.skills.BleedTimerTask;
-import com.gmail.nossr50.runnables.skills.SkillMonitorTask;
 import com.gmail.nossr50.skills.child.ChildConfig;
 import com.gmail.nossr50.skills.repair.Repairable;
 import com.gmail.nossr50.skills.repair.RepairableManager;
@@ -55,42 +53,45 @@ import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.spout.SpoutUtils;
 
 public class mcMMO extends JavaPlugin {
-    private final PlayerListener    playerListener    = new PlayerListener(this);
-    private final BlockListener     blockListener     = new BlockListener(this);
-    private final EntityListener    entityListener    = new EntityListener(this);
-    private final InventoryListener inventoryListener = new InventoryListener(this);
-    private final WorldListener     worldListener     = new WorldListener();
+    /* Managers */
+    private static ChunkManager      placeStore;
+    private static RepairableManager repairableManager;
+    private static DatabaseManager   databaseManager;
 
-    private HashMap<Integer, String>    tntTracker     = new HashMap<Integer, String>();
-
-    public static mcMMO p;
-
-    public static ChunkManager  placeStore;
-    public static RepairableManager repairableManager;
-
-    // Jar Stuff
-    public static File mcmmo;
-
-    // File Paths
+    /* File Paths */
     private static String mainDirectory;
     private static String flatFileDirectory;
     private static String usersFile;
     private static String modDirectory;
 
-    // Update Check
-    public boolean updateAvailable;
+    public static mcMMO p;
 
-    // Spout Check
-    public static boolean spoutEnabled = false;
+    // Jar Stuff
+    public static File mcmmo;
+
+    // Update Check
+    private boolean updateAvailable;
+
+    /* Plugin Checks */
+    private static boolean spoutEnabled;
+    private static boolean combatTagEnabled;
 
     // XP Event Check
-    private boolean xpEventEnabled = false;
+    private boolean xpEventEnabled;
 
-    // Metadata Values
-    public static FixedMetadataValue metadataValue;
-    public final static String entityMetadataKey = "mcMMO: Spawned Entity";
-    public final static String blockMetadataKey  = "mcMMO: Piston Tracking";
+    /* Metadata Values */
+    public final static String entityMetadataKey   = "mcMMO: Spawned Entity";
+    public final static String blockMetadataKey    = "mcMMO: Piston Tracking";
     public final static String furnaceMetadataKey  = "mcMMO: Tracked Furnace";
+    public final static String tntMetadataKey      = "mcMMO: Tracked TNT";
+    public final static String customNameKey       = "mcMMO: Custom Name";
+    public final static String customVisibleKey    = "mcMMO: Name Visibility";
+    public final static String droppedItemKey      = "mcMMO: Tracked Item";
+    public final static String infiniteArrowKey    = "mcMMO: Infinite Arrow";
+    public final static String bowForceKey         = "mcMMO: Bow Force";
+    public final static String arrowDistanceKey    = "mcMMO: Arrow Distance";
+
+    public static FixedMetadataValue metadataValue;
 
     /**
      * Things to be run when the plugin is enabled.
@@ -106,31 +107,23 @@ public class mcMMO extends JavaPlugin {
             setupSpout();
             loadConfigFiles();
 
-            if (!Config.getInstance().getUseMySQL()) {
-                UserManager.loadUsers();
-            }
+            combatTagEnabled = getServer().getPluginManager().getPlugin("CombatTag") != null;
+
+            databaseManager = new DatabaseManager(this, Config.getInstance().getUseMySQL());
 
             registerEvents();
             registerCustomRecipes();
 
-            // Setup the leader boards
-            if (Config.getInstance().getUseMySQL()) {
-                // TODO: Why do we have to check for a connection that hasn't be made yet?
-                DatabaseManager.checkConnected();
-                DatabaseManager.createStructure();
-            }
-            else {
-                LeaderboardManager.updateLeaderboards();
-            }
+            PartyManager.loadParties();
 
             for (Player player : getServer().getOnlinePlayers()) {
-                UserManager.addUser(player); // In case of reload add all users back into PlayerProfile
+                UserManager.addUser(player); // In case of reload add all users back into UserManager
             }
 
-            getLogger().info("Version " + getDescription().getVersion() + " is enabled!");
+            debug("Version " + getDescription().getVersion() + " is enabled!");
 
             scheduleTasks();
-            registerCommands();
+            CommandRegistrationManager.registerCommands();
 
             MetricsManager.setup();
 
@@ -162,10 +155,10 @@ public class mcMMO extends JavaPlugin {
     @Override
     public void onDisable() {
         try {
-            UserManager.saveAll(); // Make sure to save player information if the server shuts down
-            PartyManager.saveParties();
-            placeStore.saveAll(); // Save our metadata
-            placeStore.cleanUp(); // Cleanup empty metadata stores
+            UserManager.saveAll();      // Make sure to save player information if the server shuts down
+            PartyManager.saveParties(); // Save our parties
+            placeStore.saveAll();       // Save our metadata
+            placeStore.cleanUp();       // Cleanup empty metadata stores
         }
         catch (NullPointerException e) {}
 
@@ -191,46 +184,7 @@ public class mcMMO extends JavaPlugin {
             }
         }
 
-        getLogger().info("Was disabled."); // How informative!
-    }
-
-    /**
-     * Add a set of values to the TNT tracker.
-     *
-     * @param tntID The EntityID of the TNT
-     * @param playerName The name of the detonating player
-     */
-    public void addToTNTTracker(int tntID, String playerName) {
-        tntTracker.put(tntID, playerName);
-    }
-
-    /**
-     * Check to see if a given TNT Entity is tracked.
-     *
-     * @param tntID The EntityID of the TNT
-     * @return true if the TNT is being tracked, false otherwise
-     */
-    public boolean tntIsTracked(int tntID) {
-        return tntTracker.containsKey(tntID);
-    }
-
-    /**
-     * Get the player who detonated the TNT.
-     *
-     * @param tntID The EntityID of the TNT
-     * @return the Player who detonated it
-     */
-    public Player getTNTPlayer(int tntID) {
-        return getServer().getPlayer(tntTracker.get(tntID));
-    }
-
-    /**
-     * Remove TNT from the tracker after it explodes.
-     *
-     * @param tntID The EntityID of the TNT
-     */
-    public void removeFromTNTTracker(int tntID) {
-        tntTracker.remove(tntID);
+        debug("Was disabled."); // How informative!
     }
 
     public static String getMainDirectory() {
@@ -249,6 +203,10 @@ public class mcMMO extends JavaPlugin {
         return modDirectory;
     }
 
+    public boolean isUpdateAvailable() {
+        return updateAvailable;
+    }
+
     public boolean isXPEventEnabled() {
         return xpEventEnabled;
     }
@@ -263,6 +221,26 @@ public class mcMMO extends JavaPlugin {
 
     public void debug(String message) {
         getLogger().info("[Debug] " + message);
+    }
+
+    public static ChunkManager getPlaceStore() {
+        return placeStore;
+    }
+
+    public static DatabaseManager getDatabaseManager() {
+        return databaseManager;
+    }
+
+    public static RepairableManager getRepairableManager() {
+        return repairableManager;
+    }
+
+    public static boolean isSpoutEnabled() {
+        return spoutEnabled;
+    }
+
+    public static boolean isCombatTagEnabled() {
+        return combatTagEnabled;
     }
 
     /**
@@ -336,8 +314,7 @@ public class mcMMO extends JavaPlugin {
             spoutEnabled = true;
 
             SpoutConfig.getInstance();
-            SpoutUtils.setupSpoutConfigs();
-            SpoutUtils.registerCustomEvent();
+            getServer().getPluginManager().registerEvents(new SpoutListener(), this);
             SpoutUtils.preCacheFiles();
             SpoutUtils.reloadSpoutPlayers(); // Handle spout players after a /reload
         }
@@ -347,51 +324,12 @@ public class mcMMO extends JavaPlugin {
         PluginManager pluginManager = getServer().getPluginManager();
 
         // Register events
-        pluginManager.registerEvents(playerListener, this);
-        pluginManager.registerEvents(blockListener, this);
-        pluginManager.registerEvents(entityListener, this);
-        pluginManager.registerEvents(inventoryListener, this);
-        pluginManager.registerEvents(worldListener, this);
-    }
-
-    /**
-     * Register the commands.
-     */
-    private void registerCommands() {
-        CommandRegistrationManager.registerSkillCommands();
-
-        // mc* commands
-        CommandRegistrationManager.registerMcpurgeCommand();
-        CommandRegistrationManager.registerMcremoveCommand();
-        CommandRegistrationManager.registerMcabilityCommand();
-        CommandRegistrationManager.registerMcgodCommand();
-        CommandRegistrationManager.registerMcmmoCommand();
-        CommandRegistrationManager.registerMcrefreshCommand();
-        CommandRegistrationManager.registerMctopCommand();
-        CommandRegistrationManager.registerMcrankCommand();
-        CommandRegistrationManager.registerMcstatsCommand();
-
-        // Party commands
-        CommandRegistrationManager.registerAdminChatCommand();
-        CommandRegistrationManager.registerPartyCommand();
-        CommandRegistrationManager.registerPartyChatCommand();
-        CommandRegistrationManager.registerPtpCommand();
-
-        // Other commands
-        CommandRegistrationManager.registerAddxpCommand();
-        CommandRegistrationManager.registerAddlevelsCommand();
-        CommandRegistrationManager.registerMmoeditCommand();
-        CommandRegistrationManager.registerInspectCommand();
-        CommandRegistrationManager.registerXprateCommand();
-        CommandRegistrationManager.registerMmoupdateCommand();
-        CommandRegistrationManager.registerSkillresetCommand();
-        CommandRegistrationManager.registerHardcoreCommand();
-        CommandRegistrationManager.registerVampirismCommand();
-        CommandRegistrationManager.registerMcnotifyCommand();
-
-        // Spout commands
-        CommandRegistrationManager.registerXplockCommand();
-        CommandRegistrationManager.registerMchudCommand();
+        pluginManager.registerEvents(new PlayerListener(this), this);
+        pluginManager.registerEvents(new BlockListener(this), this);
+        pluginManager.registerEvents(new EntityListener(this), this);
+        pluginManager.registerEvents(new InventoryListener(this), this);
+        pluginManager.registerEvents(new SelfListener(), this);
+        pluginManager.registerEvents(new WorldListener(this), this);
     }
 
     private void registerCustomRecipes() {
@@ -401,44 +339,31 @@ public class mcMMO extends JavaPlugin {
     }
 
     private void scheduleTasks() {
-        // Parties are loaded at the end of first server tick otherwise Server.getOfflinePlayer throws an IndexOutOfBoundsException
-        new PartyLoaderTask().runTaskLater(this, 0);
-
         // Periodic save timer (Saves every 10 minutes by default)
         long saveIntervalTicks = Config.getInstance().getSaveInterval() * 1200;
-
         new SaveTimerTask().runTaskTimer(this, saveIntervalTicks, saveIntervalTicks);
-
-        // Regen & Cooldown timer (Runs every second)
-        new SkillMonitorTask().runTaskTimer(this, 20, 20);
 
         // Bleed timer (Runs every two seconds)
         new BleedTimerTask().runTaskTimer(this, 40, 40);
 
         // Old & Powerless User remover
-        int purgeInterval = Config.getInstance().getPurgeInterval();
-        UserPurgeTask userPurgeTask = new UserPurgeTask();
+        long purgeIntervalTicks = Config.getInstance().getPurgeInterval() * 60 * 60 * 20;
 
-        if (purgeInterval == 0) {
-            userPurgeTask.runTaskLater(this, 40);
+        if (purgeIntervalTicks == 0) {
+            new UserPurgeTask().runTaskLater(this, 40); // Start 2 seconds after startup.
         }
-        else if (purgeInterval > 0) {
-            long purgeIntervalTicks = purgeInterval * 60 * 60 * 20;
-
-            userPurgeTask.runTaskTimer(this, purgeIntervalTicks, purgeIntervalTicks);
+        else if (purgeIntervalTicks > 0) {
+            new UserPurgeTask().runTaskTimer(this, purgeIntervalTicks, purgeIntervalTicks);
         }
 
         // Automatically remove old members from parties
-        long kickInterval = Config.getInstance().getAutoPartyKickInterval();
-        PartyAutoKickTask partyAutoKickTask = new PartyAutoKickTask();
+        long kickIntervalTicks = Config.getInstance().getAutoPartyKickInterval() * 60 * 60 * 20;
 
-        if (kickInterval == 0) {
-            partyAutoKickTask.runTaskLater(this, 40); // Start 2 seconds after startup.
+        if (kickIntervalTicks == 0) {
+            new PartyAutoKickTask().runTaskLater(this, 40); // Start 2 seconds after startup.
         }
-        else if (kickInterval > 0) {
-            long kickIntervalTicks = kickInterval * 60 * 60 * 20;
-
-            partyAutoKickTask.runTaskTimer(this, kickIntervalTicks, kickIntervalTicks);
+        else if (kickIntervalTicks > 0) {
+            new PartyAutoKickTask().runTaskTimer(this, kickIntervalTicks, kickIntervalTicks);
         }
     }
 }

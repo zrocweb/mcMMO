@@ -1,23 +1,27 @@
 package com.gmail.nossr50.commands.player;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+
 import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabExecutor;
+import org.bukkit.entity.Player;
+import org.bukkit.util.StringUtil;
 
 import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.config.Config;
-import com.gmail.nossr50.database.LeaderboardManager;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
-import com.gmail.nossr50.datatypes.skills.SkillType;
-import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.runnables.commands.McrankCommandAsyncTask;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.commands.CommandUtils;
 import com.gmail.nossr50.util.player.UserManager;
-import com.gmail.nossr50.util.skills.SkillUtils;
+import com.gmail.nossr50.util.scoreboards.ScoreboardManager;
+import com.google.common.collect.ImmutableList;
 
-public class McrankCommand implements CommandExecutor {
+public class McrankCommand implements TabExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         switch (args.length) {
@@ -31,11 +35,12 @@ public class McrankCommand implements CommandExecutor {
                     return true;
                 }
 
-                if (Config.getInstance().getUseMySQL()) {
-                    sqlDisplay(sender, sender.getName());
+                if (Config.getInstance().getMcrankScoreboardEnabled()) {
+                    ScoreboardManager.setupPlayerScoreboard(sender.getName());
+                    ScoreboardManager.enablePlayerRankScoreboard((Player) sender);
                 }
                 else {
-                    flatfileDisplay(sender, sender.getName());
+                    display(sender, sender.getName());
                 }
 
                 return true;
@@ -46,24 +51,27 @@ public class McrankCommand implements CommandExecutor {
                     return true;
                 }
 
-                McMMOPlayer mcMMOPlayer = UserManager.getPlayer(args[0]);
+                String playerName = args[0];
+                McMMOPlayer mcMMOPlayer = UserManager.getPlayer(playerName);
 
-                if (mcMMOPlayer == null) {
-                    if (CommandUtils.inspectOffline(sender, new PlayerProfile(args[0], false), Permissions.mcrankOffline(sender))) {
+                if (mcMMOPlayer != null) {
+                    playerName = mcMMOPlayer.getPlayer().getName();
+
+                    if (CommandUtils.tooFar(sender, mcMMOPlayer.getPlayer(), Permissions.mcrankFar(sender))) {
                         return true;
                     }
                 }
-                else if (CommandUtils.tooFar(sender, mcMMOPlayer.getPlayer(), Permissions.mcrankFar(sender))) {
+                else if (CommandUtils.inspectOffline(sender, new PlayerProfile(playerName, false), Permissions.mcrankOffline(sender))) {
                     return true;
                 }
 
-                if (Config.getInstance().getUseMySQL()) {
-                    sqlDisplay(sender, args[0]);
+                if (sender instanceof Player && Config.getInstance().getMcrankScoreboardEnabled()) {
+                    ScoreboardManager.setupPlayerScoreboard(sender.getName());
+                    ScoreboardManager.enablePlayerRankScoreboardOthers((Player) sender, playerName);
                 }
                 else {
-                    flatfileDisplay(sender, args[0]);
+                    display(sender, playerName);
                 }
-
                 return true;
 
             default:
@@ -71,39 +79,18 @@ public class McrankCommand implements CommandExecutor {
         }
     }
 
-    private void flatfileDisplay(CommandSender sender, String playerName) {
-        LeaderboardManager.updateLeaderboards(); // Make sure the information is up to date
-
-        sender.sendMessage(LocaleLoader.getString("Commands.mcrank.Heading"));
-        sender.sendMessage(LocaleLoader.getString("Commands.mcrank.Player", playerName));
-
-        for (SkillType skillType : SkillType.values()) {
-            int[] rankInts = LeaderboardManager.getPlayerRank(playerName, skillType);
-
-            if (!Permissions.skillEnabled(sender, skillType) || skillType.isChildSkill()) {
-                continue;
-            }
-
-            if (rankInts[1] == 0) {
-                sender.sendMessage(LocaleLoader.getString("Commands.mcrank.Skill", SkillUtils.getSkillName(skillType), LocaleLoader.getString("Commands.mcrank.Unranked"))); // Don't bother showing ranking for players without skills
-            }
-            else {
-                sender.sendMessage(LocaleLoader.getString("Commands.mcrank.Skill", SkillUtils.getSkillName(skillType), rankInts[0]));
-            }
-        }
-
-        // Show the powerlevel ranking
-        int[] rankInts = LeaderboardManager.getPlayerRank(playerName);
-
-        if (rankInts[1] == 0) {
-            sender.sendMessage(LocaleLoader.getString("Commands.mcrank.Overall", LocaleLoader.getString("Commands.mcrank.Unranked"))); // Don't bother showing ranking for players without skills
-        }
-        else {
-            sender.sendMessage(LocaleLoader.getString("Commands.mcrank.Overall", rankInts[0]));
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        switch (args.length) {
+            case 1:
+                Set<String> playerNames = UserManager.getPlayers().keySet();
+                return StringUtil.copyPartialMatches(args[0], playerNames, new ArrayList<String>(playerNames.size()));
+            default:
+                return ImmutableList.of();
         }
     }
 
-    private void sqlDisplay(CommandSender sender, String playerName) {
+    private void display(CommandSender sender, String playerName) {
         new McrankCommandAsyncTask(playerName, sender).runTaskAsynchronously(mcMMO.p);
     }
 }

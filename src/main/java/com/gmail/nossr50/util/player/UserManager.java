@@ -1,8 +1,7 @@
 package com.gmail.nossr50.util.player;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.bukkit.OfflinePlayer;
@@ -12,23 +11,9 @@ import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 
 public final class UserManager {
-    private static Map<String, McMMOPlayer> players = new HashMap<String, McMMOPlayer>();
+    private final static Map<String, McMMOPlayer> players = new HashMap<String, McMMOPlayer>();
 
     private UserManager() {};
-
-    /**
-     * Load users.
-     */
-    public static void loadUsers() {
-        new File(mcMMO.getFlatFileDirectory()).mkdir();
-
-        try {
-            new File(mcMMO.getUsersFilePath()).createNewFile();
-        }
-        catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
 
     /**
      * Add a new user.
@@ -81,12 +66,16 @@ public final class UserManager {
     }
 
     /**
-     * Get the McMMOPlayer of a player by name.
+     * Get the McMMOPlayer of a player by a partial name.
      *
-     * @param playerName The name of the player whose McMMOPlayer to retrieve
+     * @param playerName The partial name of the player whose McMMOPlayer to retrieve
      * @return the player's McMMOPlayer object
      */
     public static McMMOPlayer getPlayer(String playerName) {
+        List<Player> matches = mcMMO.p.getServer().matchPlayer(playerName);
+        if (matches.size() == 1) {
+            playerName = matches.get(0).getName();
+        }
         return players.get(playerName);
     }
 

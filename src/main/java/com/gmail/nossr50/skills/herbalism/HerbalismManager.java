@@ -5,12 +5,14 @@ import java.util.List;
 
 import org.bukkit.CropState;
 import org.bukkit.Material;
+import org.bukkit.NetherWartsState;
 import org.bukkit.block.BlockState;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.material.CocoaPlant;
 import org.bukkit.material.CocoaPlant.CocoaPlantSize;
+import org.bukkit.material.NetherWarts;
 
 import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.config.Config;
@@ -114,9 +116,9 @@ public class HerbalismManager extends SkillManager {
      */
     public void herbalismBlockCheck(BlockState blockState) {
         Material material = blockState.getType();
-        boolean oneBlockPlant = (material == Material.CACTUS || material == Material.SUGAR_CANE_BLOCK) ? false : true;
+        boolean oneBlockPlant = !(material == Material.CACTUS || material == Material.SUGAR_CANE_BLOCK);
 
-        if (oneBlockPlant && mcMMO.placeStore.isTrue(blockState)) {
+        if (oneBlockPlant && mcMMO.getPlaceStore().isTrue(blockState)) {
             return;
         }
 
@@ -204,8 +206,8 @@ public class HerbalismManager extends SkillManager {
 
             case RED_ROSE:
             case YELLOW_FLOWER:
-                if (mcMMO.placeStore.isTrue(blockState)) {
-                    mcMMO.placeStore.setFalse(blockState);
+                if (mcMMO.getPlaceStore().isTrue(blockState)) {
+                    mcMMO.getPlaceStore().setFalse(blockState);
                     return false;
                 }
 
@@ -307,20 +309,22 @@ public class HerbalismManager extends SkillManager {
                 return true;
 
             case NETHER_WARTS:
+                NetherWarts warts = (NetherWarts) blockState.getData();
+
                 if (greenTerra) {
-                    blockState.setRawData((byte) 2);
+                    warts.setState(NetherWartsState.STAGE_TWO);
                 }
                 else {
                     int greenThumbStage = getGreenThumbStage();
 
                     if (greenThumbStage > 2) {
-                        blockState.setRawData((byte) 2);
+                        warts.setState(NetherWartsState.STAGE_TWO);
                     }
                     else if (greenThumbStage == 2) {
-                        blockState.setRawData((byte) 1);
+                        warts.setState(NetherWartsState.STAGE_ONE);
                     }
                     else {
-                        blockState.setRawData((byte) 0);
+                        warts.setState(NetherWartsState.SEEDED);
                     }
                 }
 

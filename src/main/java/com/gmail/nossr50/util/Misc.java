@@ -1,16 +1,17 @@
 package com.gmail.nossr50.util;
 
+import java.util.Collection;
 import java.util.Random;
 
+import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.Item;
+import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 import com.gmail.nossr50.mcMMO;
-import com.gmail.nossr50.config.Config;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.spout.huds.McMMOHud;
 import com.gmail.nossr50.events.items.McMMOItemSpawnEvent;
@@ -19,7 +20,6 @@ import com.gmail.nossr50.util.spout.SpoutUtils;
 
 public final class Misc {
     private static Random random = new Random();
-    public static boolean isSpawnerXPEnabled = Config.getInstance().getExperienceGainsMobspawnersEnabled();
     public static final int PLAYER_RESPAWN_COOLDOWN_SECONDS = 5;
     public static final int TIME_CONVERSION_FACTOR = 1000;
     public static final double SKILL_MESSAGE_MAX_SENDING_DISTANCE = 10.0;
@@ -27,21 +27,28 @@ public final class Misc {
     // Sound Pitches & Volumes from CB
     public static final float ANVIL_USE_PITCH  = 0.3F; // Not in CB directly, I went off the place sound values
     public static final float ANVIL_USE_VOLUME = 1.0F; // Not in CB directly, I went off the place sound values
-    public static final float FIZZ_PITCH       = 2.6F + (Misc.getRandom().nextFloat() - Misc.getRandom().nextFloat()) * 0.8F;
     public static final float FIZZ_VOLUME      = 0.5F;
-    public static final float POP_PITCH        = ((getRandom().nextFloat() - getRandom().nextFloat()) * 0.7F + 1.0F) * 2.0F;
     public static final float POP_VOLUME       = 0.2F;
     public static final float BAT_VOLUME       = 1.0F;
     public static final float BAT_PITCH        = 0.6F;
+    public static final float GHAST_VOLUME     = 1.0F;
 
     private Misc() {};
 
-    public static boolean isNPCEntity(Entity entity) {
-        if (entity == null || entity.hasMetadata("NPC")) {
-            return true;
-        }
+    public static float getFizzPitch() {
+        return 2.6F + (getRandom().nextFloat() - getRandom().nextFloat()) * 0.8F;
+    }
 
-        return false;
+    public static float getPopPitch() {
+        return ((getRandom().nextFloat() - getRandom().nextFloat()) * 0.7F + 1.0F) * 2.0F;
+    }
+
+    public static float getGhastPitch() {
+        return (getRandom().nextFloat() - getRandom().nextFloat()) * 0.2F + 1.0F;
+    }
+
+    public static boolean isNPCEntity(Entity entity) {
+        return (entity == null || entity.hasMetadata("NPC") || (mcMMO.isCombatTagEnabled() && entity instanceof HumanEntity && ((HumanEntity) entity).getName().contains("PvpLogger")));
     }
 
     /**
@@ -88,11 +95,13 @@ public final class Misc {
             return false;
         }
 
-        if (first.distanceSquared(second) < (maxDistance * maxDistance)) {
-            return true;
-        }
+        return first.distanceSquared(second) < (maxDistance * maxDistance) || maxDistance == 0;
+    }
 
-        return false;
+    public static void dropItems(Location location, Collection<ItemStack> drops) {
+        for (ItemStack drop : drops) {
+            dropItem(location, drop);
+        }
     }
 
     /**
@@ -145,7 +154,6 @@ public final class Misc {
      * @param itemStack The item to drop
      */
     public static void dropItem(Location location, ItemStack itemStack) {
-
         if (itemStack.getType() == Material.AIR) {
             return;
         }
@@ -158,12 +166,7 @@ public final class Misc {
             return;
         }
 
-        Item newItem = location.getWorld().dropItemNaturally(location, itemStack);
-
-        ItemStack cloned = itemStack.clone();
-        cloned.setAmount(newItem.getItemStack().getAmount());
-
-        newItem.setItemStack(cloned);
+        location.getWorld().dropItemNaturally(location, itemStack);
     }
 
     public static void profileCleanup(String playerName) {
@@ -182,9 +185,21 @@ public final class Misc {
             if (player.isOnline()) {
                 UserManager.addUser(player);
 
-                if (mcMMO.spoutEnabled) {
+                if (mcMMO.isSpoutEnabled()) {
                     SpoutUtils.reloadSpoutPlayer(player);
                 }
+            }
+        }
+    }
+
+    public static void resendChunkRadiusAt(Player player, int radius) {
+        Chunk chunk = player.getLocation().getChunk();
+        int chunkX = chunk.getX();
+        int chunkZ = chunk.getZ();
+
+        for (int x = chunkX - radius; x < chunkX + radius; x++) {
+            for (int z = chunkZ - radius; z < chunkZ + radius; z++) {
+                player.getWorld().refreshChunk(x, z);
             }
         }
     }

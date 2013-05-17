@@ -7,6 +7,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.config.Config;
 import com.gmail.nossr50.datatypes.party.Party;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
@@ -21,21 +22,28 @@ public class PartyInfoCommand implements CommandExecutor {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        McMMOPlayer mcMMOPlayer = UserManager.getPlayer(sender.getName());
-        player = mcMMOPlayer.getPlayer();
-        playerParty = mcMMOPlayer.getParty();
+        switch (args.length) {
+            case 0:
+            case 1:
+                McMMOPlayer mcMMOPlayer = UserManager.getPlayer(sender.getName());
+                player = mcMMOPlayer.getPlayer();
+                playerParty = mcMMOPlayer.getParty();
 
-        displayPartyHeader();
-        displayShareModeInfo();
-        displayMemberInfo();
-        return true;
+                displayPartyHeader();
+                displayShareModeInfo();
+                displayMemberInfo();
+                return true;
+            default:
+                sender.sendMessage(LocaleLoader.getString("Commands.Usage.1", "party", "info"));
+                return true;
+        }
     }
 
     private String createMembersList() {
         StringBuilder memberList = new StringBuilder();
 
-        for (OfflinePlayer member : playerParty.getMembers()) {
-            String memberName = member.getName();
+        for (String memberName : playerParty.getMembers()) {
+            OfflinePlayer member = mcMMO.p.getServer().getOfflinePlayer(memberName);
 
             if (playerParty.getLeader().equalsIgnoreCase(memberName)) {
                 memberList.append(ChatColor.GOLD);

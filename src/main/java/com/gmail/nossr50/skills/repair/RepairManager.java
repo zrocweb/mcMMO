@@ -3,7 +3,6 @@ package com.gmail.nossr50.skills.repair;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -11,10 +10,9 @@ import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
-import org.getspout.spoutapi.SpoutManager;
-import org.getspout.spoutapi.player.SpoutPlayer;
 
 import com.gmail.nossr50.mcMMO;
+import com.gmail.nossr50.config.Config;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.SkillType;
 import com.gmail.nossr50.events.skills.repair.McMMOPlayerRepairCheckEvent;
@@ -24,7 +22,9 @@ import com.gmail.nossr50.skills.repair.ArcaneForging.Tier;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.StringUtils;
+import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.SkillUtils;
+import com.gmail.nossr50.util.spout.SpoutUtils;
 
 public class RepairManager extends SkillManager {
     public RepairManager(McMMOPlayer mcMMOPlayer) {
@@ -43,16 +43,8 @@ public class RepairManager extends SkillManager {
             return;
         }
 
-        if (mcMMO.spoutEnabled) {
-            SpoutPlayer spoutPlayer = SpoutManager.getPlayer(player);
-
-            if (spoutPlayer.isSpoutCraftEnabled()) {
-                String[] spoutMessages = Repair.getSpoutAnvilMessages(anvilId);
-                spoutPlayer.sendNotification(spoutMessages[0], spoutMessages[1], Material.getMaterial(anvilId));
-            }
-            else {
-                player.sendMessage(Repair.getAnvilMessage(anvilId));
-            }
+        if (mcMMO.isSpoutEnabled()) {
+            SpoutUtils.sendRepairNotifications(player, anvilId);
         }
         else {
             player.sendMessage(Repair.getAnvilMessage(anvilId));
@@ -66,7 +58,7 @@ public class RepairManager extends SkillManager {
         Player player = getPlayer();
         int itemId = item.getTypeId();
 
-        Repairable repairable = mcMMO.repairableManager.getRepairable(itemId);
+        Repairable repairable = mcMMO.getRepairableManager().getRepairable(itemId);
 
         // Permissions checks on material and item types
         if (!repairable.getRepairItemType().getPermissions(player)) {
@@ -175,10 +167,6 @@ public class RepairManager extends SkillManager {
     public void handleSalvage(Location location, ItemStack item) {
         Player player = getPlayer();
 
-        if (player.getGameMode() != GameMode.SURVIVAL) {
-            return;
-        }
-
         if (getSkillLevel() < Repair.salvageUnlockLevel) {
             player.sendMessage(LocaleLoader.getString("Repair.Skills.AdeptSalvage"));
             return;
@@ -196,6 +184,38 @@ public class RepairManager extends SkillManager {
         else {
             player.sendMessage(LocaleLoader.getString("Repair.Skills.NotFullDurability"));
         }
+    }
+
+    /**
+     * Check if the player has tried to use an Anvil before.
+     *
+     * @return true if the player has confirmed using an Anvil
+     */
+    public boolean checkConfirmation(int anvilId, boolean actualize) {
+        Player player = getPlayer();
+        McMMOPlayer mcMMOPlayer = UserManager.getPlayer(player);
+
+        long LastUse =  mcMMOPlayer.getLastAnvilUse(anvilId);
+
+        // Don't use SkillUtils.cooldownOver() here since that also accounts for the cooldown perks
+        if ((((LastUse + 3) * Misc.TIME_CONVERSION_FACTOR) >= System.currentTimeMillis()) || !Config.getInstance().getRepairConfirmRequired()) {
+            return true;
+        }
+
+        if (!actualize) {
+            return false;
+        }
+
+        mcMMOPlayer.actualizeLastAnvilUse(anvilId);
+
+        if (anvilId == Repair.repairAnvilId) {
+            player.sendMessage(LocaleLoader.getString("Skills.ConfirmOrCancel", LocaleLoader.getString("Repair.Pretty.Name")));
+        }
+
+        if (anvilId == Repair.salvageAnvilId) {
+            player.sendMessage(LocaleLoader.getString("Skills.ConfirmOrCancel", LocaleLoader.getString("Salvage.Pretty.Name")));
+        }
+        return false;
     }
 
     /**

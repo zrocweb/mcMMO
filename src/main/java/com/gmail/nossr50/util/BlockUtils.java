@@ -1,9 +1,11 @@
 package com.gmail.nossr50.util;
 
 import org.bukkit.CropState;
+import org.bukkit.NetherWartsState;
 import org.bukkit.block.BlockState;
 import org.bukkit.material.CocoaPlant;
 import org.bukkit.material.CocoaPlant.CocoaPlantSize;
+import org.bukkit.material.NetherWarts;
 
 import com.gmail.nossr50.config.Config;
 
@@ -17,49 +19,7 @@ public final class BlockUtils {
      * @return true if the block awards XP, false otherwise
      */
     public static boolean shouldBeWatched(BlockState blockState) {
-        switch (blockState.getType()) {
-            case BROWN_MUSHROOM:
-            case CACTUS:
-            case CLAY:
-            case COAL_ORE:
-            case DIAMOND_ORE:
-            case DIRT:
-            case ENDER_STONE:
-            case GLOWING_REDSTONE_ORE:
-            case GLOWSTONE:
-            case GOLD_ORE:
-            case GRASS:
-            case GRAVEL:
-            case IRON_ORE:
-            case LAPIS_ORE:
-            case LOG:
-            case MELON_BLOCK:
-            case MOSSY_COBBLESTONE:
-            case MYCEL:
-            case NETHERRACK:
-            case OBSIDIAN:
-            case PUMPKIN:
-            case QUARTZ_ORE:
-            case RED_MUSHROOM:
-            case RED_ROSE:
-            case REDSTONE_ORE:
-            case SAND:
-            case SANDSTONE:
-            case SOUL_SAND:
-            case STONE:
-            case SUGAR_CANE_BLOCK:
-            case VINE:
-            case WATER_LILY:
-            case YELLOW_FLOWER:
-            case COCOA:
-            case EMERALD_ORE:
-            case CARROT:
-            case POTATO:
-                return true;
-
-            default:
-                return ModUtils.getCustomBlock(blockState) != null;
-        }
+        return affectedByGigaDrillBreaker(blockState) || affectedByGreenTerra(blockState) || affectedBySuperBreaker(blockState) || isLog(blockState);
     }
 
     /**
@@ -99,17 +59,7 @@ public final class BlockUtils {
                 return false;
 
             default:
-                int blockId = blockState.getTypeId();
-
-                if (blockId == Config.getInstance().getRepairAnvilId() || blockId == Config.getInstance().getSalvageAnvilId()) {
-                    return false;
-                }
-
-                if (ModUtils.isCustomAbilityBlock(blockState)) {
-                    return false;
-                }
-
-                return true;
+                return !isMcMMOAnvil(blockState) && !ModUtils.isCustomAbilityBlock(blockState);
         }
     }
 
@@ -184,7 +134,7 @@ public final class BlockUtils {
                 return blockState.getRawData() == CropState.RIPE.getData();
 
             case NETHER_WARTS:
-                return blockState.getRawData() == (byte) 0x3;
+                return ((NetherWarts) blockState.getData()).getState() == NetherWartsState.RIPE;
 
             case COCOA:
                 return ((CocoaPlant) blockState.getData()).getSize() == CocoaPlantSize.LARGE;
@@ -202,26 +152,17 @@ public final class BlockUtils {
      */
     public static Boolean affectedBySuperBreaker(BlockState blockState) {
         switch (blockState.getType()) {
-            case COAL_ORE:
-            case DIAMOND_ORE:
             case ENDER_STONE:
-            case GLOWING_REDSTONE_ORE:
             case GLOWSTONE:
-            case GOLD_ORE:
-            case IRON_ORE:
-            case LAPIS_ORE:
             case MOSSY_COBBLESTONE:
             case NETHERRACK:
             case OBSIDIAN:
-            case QUARTZ_ORE:
-            case REDSTONE_ORE:
             case SANDSTONE:
             case STONE:
-            case EMERALD_ORE:
                 return true;
 
             default:
-                return ModUtils.isCustomMiningBlock(blockState);
+                return isOre(blockState) || ModUtils.isCustomMiningBlock(blockState);
         }
     }
 
@@ -254,16 +195,7 @@ public final class BlockUtils {
      * @return true if the block should affected by Tree Feller, false otherwise
      */
     public static boolean affectedByTreeFeller(BlockState blockState) {
-        switch (blockState.getType()) {
-            case LOG:
-            case LEAVES:
-            case HUGE_MUSHROOM_1:
-            case HUGE_MUSHROOM_2:
-                return true;
-
-            default:
-                return ModUtils.isCustomWoodcuttingBlock(blockState);
-        }
+        return isLog(blockState) || isLeaves(blockState);
     }
 
     /**
@@ -366,5 +298,17 @@ public final class BlockUtils {
             default:
                 return false;
         }
+    }
+
+    /**
+     * Determine if a given block is an mcMMO anvil
+     *
+     * @param blockState The {@link BlockState} of the block to check
+     * @return true if the block is an mcMMO anvil, false otherwise
+     */
+    private static boolean isMcMMOAnvil(BlockState blockState) {
+        int blockId = blockState.getTypeId();
+
+        return blockId == Config.getInstance().getRepairAnvilId() || blockId == Config.getInstance().getSalvageAnvilId();
     }
 }
